@@ -19,20 +19,6 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: Setup Android SDK
-      run: |
-        mkdir -p $HOME/android-sdk/cmdline-tools
-        cd $HOME/android-sdk/cmdline-tools
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O t.zip
-        unzip -q t.zip
-        mv cmdline-tools latest
-        rm t.zip
-        export ANDROID_HOME=$HOME/android-sdk
-        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
-        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
-
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
@@ -40,6 +26,19 @@ jobs:
 
     - name: Install Bubblewrap CLI
       run: npm install -g @bubblewrap/cli
+
+    - name: Create Bubblewrap Config File
+      run: |
+        # Use pre-installed Android SDK from GitHub runner
+        export ANDROID_HOME=/usr/local/lib/android/sdk
+        mkdir -p $HOME/.bubblewrap
+        echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > $HOME/.bubblewrap/config.json
+        cat $HOME/.bubblewrap/config.json
+
+    - name: Verify Bubblewrap Paths
+      run: |
+        export ANDROID_HOME=/usr/local/lib/android/sdk
+        bubblewrap doctor || true
 
     - name: Create Keystore
       run: |
@@ -84,13 +83,7 @@ jobs:
           "orientation": "portrait"
         }
         CONFIG
-        
-        # Pass JDK path directly via flag to skip prompt
-        bubblewrap init \
-          --config=bubblewrap.config.json \
-          --directory=. \
-          --skipPwaValidation \
-          --jdkPath "$JAVA_HOME"
+        bubblewrap init --config=bubblewrap.config.json --directory=. --skipPwaValidation
 
     - name: Build APK
       env:
@@ -98,9 +91,7 @@ jobs:
         BUBBLEWRAP_KEY_PASSWORD: password123
       run: |
         cd android-app
-        bubblewrap build \
-          --skipPwaValidation \
-          --jdkPath "$JAVA_HOME"
+        bubblewrap build --skipPwaValidation
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
