@@ -26,7 +26,7 @@ jobs:
     - name: Install Bubblewrap CLI
       run: npm install -g @bubblewrap/cli
 
-    - name: Create Bubblewrap Project (Non-Interactive)
+    - name: Create Bubblewrap Project
       run: |
         mkdir android-app
         cd android-app
@@ -42,7 +42,6 @@ jobs:
           "startUrl": "/",
           "iconUrl": "https://amar-hisab.sohag18267.workers.dev/pwa-512x512.png",
           "maskableIconUrl": "https://amar-hisab.sohag18267.workers.dev/pwa-512x512.png",
-          "splashScreenFadeOutDuration": 300,
           "signingKey": {
             "path": "./android.keystore",
             "alias": "android"
