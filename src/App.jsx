@@ -410,6 +410,7 @@ function App() {
   }
 
   function openEditPaymentModal(payment) {
+    setHistoryModal(null)
     setEditingPayment(payment)
     setPaymentAmount(payment.amount)
     setPaymentDateRecord(payment.payment_date)
