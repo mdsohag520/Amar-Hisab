@@ -13,20 +13,92 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Build APK using Docker (Bubblewrap)
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Android SDK
+      run: |
+        mkdir -p $HOME/android-sdk/cmdline-tools
+        cd $HOME/android-sdk/cmdline-tools
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O t.zip
+        unzip -q t.zip
+        mv cmdline-tools latest
+        rm t.zip
+        export ANDROID_HOME=$HOME/android-sdk
+        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install Bubblewrap CLI
+      run: npm install -g @bubblewrap/cli
+
+    - name: Bubblewrap Global Config
+      run: |
+        mkdir -p $HOME/.bubblewrap
+        echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > $HOME/.bubblewrap/config.json
+        cat $HOME/.bubblewrap/config.json
+
+    - name: Create Keystore
       run: |
         mkdir -p android-app
         cd android-app
-        
-        # Init bubblewrap project non-interactively inside Docker
-        docker run --rm -v "$PWD":/app -w /app google/bubblewrap:latest \
-          bubblewrap init \
-          --manifest=https://amar-hisab.sohag18267.workers.dev/manifest.webmanifest \
-          --directory=.
-          
-        # Build the APK inside Docker
-        docker run --rm -v "$PWD":/app -w /app google/bubblewrap:latest \
-          bubblewrap build --skipPwaValidation
+        keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Amar Hisab, OU=Dev, O=Amar Hisab, L=Dhaka, ST=Dhaka, C=BD"
+
+    - name: Init Bubblewrap Project
+      env:
+        BUBBLEWRAP_KEYSTORE_PASSWORD: password123
+        BUBBLEWRAP_KEY_PASSWORD: password123
+      run: |
+        cd android-app
+        cat > bubblewrap.config.json <<'CONFIG'
+        {
+          "packageId": "com.sohag.amarhisab",
+          "host": "amar-hisab.sohag18267.workers.dev",
+          "name": "আমার হিসাব",
+          "launcherName": "আমার হিসাব",
+          "display": "standalone",
+          "themeColor": "#059669",
+          "backgroundColor": "#0f172a",
+          "startUrl": "/",
+          "iconUrl": "https://amar-hisab.sohag18267.workers.dev/pwa-512x512.png",
+          "maskableIconUrl": "https://amar-hisab.sohag18267.workers.dev/pwa-512x512.png",
+          "signingKey": {
+            "path": "./android.keystore",
+            "alias": "android"
+          },
+          "appVersionName": "1.0.0",
+          "appVersionCode": 1,
+          "shortcuts": [],
+          "generatorApp": "bubblewrap-cli",
+          "webManifestUrl": "https://amar-hisab.sohag18267.workers.dev/manifest.webmanifest",
+          "fallbackType": "customtabs",
+          "features": {},
+          "enableNotifications": false,
+          "isChromeOSOnly": false,
+          "isMetaQuest": false,
+          "fullScopeUrl": "https://amar-hisab.sohag18267.workers.dev/",
+          "minSdkVersion": 19,
+          "orientation": "portrait"
+        }
+        CONFIG
+        bubblewrap init --config=bubblewrap.config.json --directory=. --skipPwaValidation
+
+    - name: Build APK
+      env:
+        BUBBLEWRAP_KEYSTORE_PASSWORD: password123
+        BUBBLEWRAP_KEY_PASSWORD: password123
+      run: |
+        cd android-app
+        bubblewrap build --skipPwaValidation
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
