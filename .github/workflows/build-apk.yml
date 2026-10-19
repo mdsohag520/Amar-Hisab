@@ -26,20 +26,48 @@ jobs:
     - name: Install Bubblewrap CLI
       run: npm install -g @bubblewrap/cli
 
-    - name: Create Bubblewrap Project
+    - name: Create Bubblewrap Project (Non-Interactive)
       run: |
         mkdir android-app
         cd android-app
-        yes | bubblewrap init --manifest=https://amar-hisab.sohag18267.workers.dev/manifest.webmanifest --directory=. || true
+        cat > bubblewrap.config.json <<'CONFIG'
+        {
+          "packageId": "com.sohag.amarhisab",
+          "host": "amar-hisab.sohag18267.workers.dev",
+          "name": "আমার হিসাব",
+          "launcherName": "আমার হিসাব",
+          "display": "standalone",
+          "themeColor": "#059669",
+          "backgroundColor": "#0f172a",
+          "startUrl": "/",
+          "iconUrl": "https://amar-hisab.sohag18267.workers.dev/pwa-512x512.png",
+          "maskableIconUrl": "https://amar-hisab.sohag18267.workers.dev/pwa-512x512.png",
+          "splashScreenFadeOutDuration": 300,
+          "signingKey": {
+            "path": "./android.keystore",
+            "alias": "android"
+          },
+          "appVersionName": "1.0.0",
+          "appVersionCode": 1,
+          "shortcuts": [],
+          "generatorApp": "bubblewrap-cli",
+          "webManifestUrl": "https://amar-hisab.sohag18267.workers.dev/manifest.webmanifest",
+          "fallbackType": "customtabs",
+          "features": {},
+          "enableNotifications": false,
+          "isChromeOSOnly": false,
+          "isMetaQuest": false,
+          "fullScopeUrl": "https://amar-hisab.sohag18267.workers.dev/",
+          "minSdkVersion": 19,
+          "orientation": "portrait"
+        }
+        CONFIG
+        bubblewrap init --config=bubblewrap.config.json --directory=. --skipPwaValidation
 
     - name: Create Keystore
       run: |
         cd android-app
         keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Amar Hisab, OU=Dev, O=Amar Hisab, L=Dhaka, S=Dhaka, C=BD"
-        sed -i 's/signingKey { storeFile file(".\/android.keystore")/signingKey { storeFile file("android.keystore")/' app/build.gradle
-        sed -i 's/storePassword ".*"/storePassword "password123"/' app/build.gradle
-        sed -i 's/keyPassword ".*"/keyPassword "password123"/' app/build.gradle
-        sed -i 's/keyAlias ".*"/keyAlias "android"/' app/build.gradle
 
     - name: Build APK
       run: |
