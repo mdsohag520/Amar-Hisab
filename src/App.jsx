@@ -55,7 +55,7 @@ const translations = {
     forgotPassword: 'পাসওয়ার্ড ভুলে গেছেন?', resetPasswordTitle: 'পাসওয়ার্ড রিসেট করুন', sendResetLink: 'রিসেট লিংক পাঠান', changePassword: 'পাসওয়ার্ড পরিবর্তন করুন', newPassword: 'নতুন পাসওয়ার্ড', updatePasswordBtn: 'পাসওয়ার্ড আপডেট করুন', profileSettings: 'প্রোফাইল সেটিংস', fullName: 'পুরো নাম', updateProfile: 'প্রোফাইল আপডেট করুন',
     verifyEmailMsg: 'আপনার ইমেইলে একটি ভেরিফিকেশন লিংক পাঠানো হয়েছে। অনুগ্রহ করে লিংকে ক্লিক করে লগইন করুন।',
     resetEmailSent: 'পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হয়েছে!', backToLogin: 'লগইনে ফিরে যান',
-    editPayment: 'পরিশোধ এডিট করুন'
+    editPayment: 'পরিশোধ এডিট করুন', totalPaidToContact: 'মোট পরিশোধ করেছে', totalReceivedFromContact: 'মোট পরিশোধ করেছেন'
   },
   EN: {
     appName: 'Amar Hisab', appTagline: 'AMAR HISAB', brandSubtext: 'Your money, your control', brandSubtext2: 'Keep your finances organized.',
@@ -93,7 +93,7 @@ const translations = {
     forgotPassword: 'Forgot Password?', resetPasswordTitle: 'Reset Password', sendResetLink: 'Send Reset Link', changePassword: 'Change Password', newPassword: 'New Password', updatePasswordBtn: 'Update Password', profileSettings: 'Profile Settings', fullName: 'Full Name', updateProfile: 'Update Profile',
     verifyEmailMsg: 'A verification link has been sent to your email. Please click the link to login.',
     resetEmailSent: 'Password reset link sent to your email!', backToLogin: 'Back to Login',
-    editPayment: 'Edit Payment'
+    editPayment: 'Edit Payment', totalPaidToContact: 'Total Paid by Them', totalReceivedFromContact: 'Total Paid by You'
   },
 }
 
@@ -333,15 +333,12 @@ function App() {
     setDeleteDialog({
       isOpen: true, message: t.confirmDeleteMsg,
       onConfirm: async () => {
-        // 1. Find payment to subtract amount
         const payment = payments.find(p => p.id === id)
         if (!payment) return
 
-        // 2. Delete payment record
         const { error: delError } = await supabase.from('debt_payments').delete().eq('id', id)
         if (delError) return showToast(delError.message, 'error')
 
-        // 3. Update Debt paid_amount
         const debt = debts.find(d => d.id === payment.debt_id)
         if (debt) {
             const newPaid = Number(debt.paid_amount) - Number(payment.amount)
@@ -350,7 +347,6 @@ function App() {
             else { setDebts(prev => prev.map(d => d.id === debt.id ? {...d, paid_amount: newPaid} : d)) }
         }
 
-        // 4. Update UI state
         setPayments(prev => prev.filter(p => p.id !== id))
         setHistoryModal(prev => prev ? { ...prev, history: prev.history.filter(p => p.id !== id) } : null)
         showToast(lang === 'BN' ? 'পরিশোধ মুছে ফেলা হয়েছে' : 'Payment deleted')
@@ -455,6 +451,20 @@ function App() {
     return matchesType && matchesSearch
   })
 
+  // Helper to calculate contact specific stats
+  const getContactStats = (contactId) => {
+    const entries = khataEntries.filter(e => e.contact_id === contactId)
+    const totalGave = entries.filter(e => e.type === 'give').reduce((s,e) => s + Number(e.amount), 0)
+    const totalTook = entries.filter(e => e.type === 'take').reduce((s,e) => s + Number(e.amount), 0)
+    const totalPaid = entries.filter(e => e.type === 'take').reduce((s,e) => s + Number(e.amount), 0) // Assuming 'take' means they paid back or I received
+    const balance = totalGave - totalTook
+    
+    // Simple calculation for "total paid"
+    const totalPaidByThem = entries.filter(e => e.type === 'take').reduce((s,e) => s + Number(e.amount), 0)
+
+    return { totalGave, totalTook, balance, totalPaidByThem }
+  }
+
   const getContactBalance = (contactId) => {
     const entries = khataEntries.filter(e => e.contact_id === contactId)
     let bal = 0
@@ -555,7 +565,6 @@ function App() {
     if (!Number.isFinite(payVal) || payVal <= 0) return
     
     if (editingPayment) {
-        // Editing existing payment
         const oldPayment = payments.find(p => p.id === editingPayment.id)
         if (!oldPayment) return
         const debt = debts.find(d => d.id === oldPayment.debt_id)
@@ -564,15 +573,12 @@ function App() {
         const newDebtPaidAmount = Number(debt.paid_amount) - Number(oldPayment.amount) + payVal
         if (newDebtPaidAmount > Number(debt.amount)) return showToast(lang === 'BN' ? 'পরিশোধের পরিমাণ মূল টাকার চেয়ে বেশি হতে পারে না!' : 'Payment cannot exceed the total amount!', 'error')
 
-        // 1. Update Payment record
         const { error: payError } = await supabase.from('debt_payments').update({ amount: payVal, payment_date: paymentDateRecord }).eq('id', editingPayment.id)
         if (payError) return showToast(payError.message, 'error')
 
-        // 2. Update Debt paid_amount
         const { error: debtError } = await supabase.from('debts').update({ paid_amount: newDebtPaidAmount }).eq('id', debt.id)
         if (debtError) return showToast(debtError.message, 'error')
 
-        // 3. Update UI
         setPayments(prev => prev.map(p => p.id === editingPayment.id ? { ...p, amount: payVal, payment_date: paymentDateRecord } : p))
         setDebts(prev => prev.map(d => d.id === debt.id ? { ...d, paid_amount: newDebtPaidAmount } : d))
         
@@ -588,7 +594,6 @@ function App() {
         setPaymentDateRecord(new Date().toISOString().slice(0, 10))
         showToast(lang === 'BN' ? 'পরিশোধ আপডেট হয়েছে!' : 'Payment updated!')
     } else {
-        // Adding new payment
         const currentDebt = paymentModal
         const newPaidAmount = Number(currentDebt.paid_amount) + payVal
         if (newPaidAmount > Number(currentDebt.amount)) return showToast(lang === 'BN' ? 'পরিশোধের পরিমাণ মূল টাকার চেয়ে বেশি হতে পারে না!' : 'Payment cannot exceed the total amount!', 'error')
@@ -954,27 +959,40 @@ function App() {
                 <button onClick={() => setSelectedContactId(null)} style={{ background: 'none', border: 'none', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '16px', fontWeight: '600' }}>
                   <ChevronRight size={16} style={{ transform: 'rotate(180deg)' }} /> {t.backToContacts}
                 </button>
-                <div style={{ background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '16px', textAlign: 'center', marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '18px', color: 'white', marginBottom: '4px' }}>{selectedContact.name}</h3>
-                  <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '12px' }}><Phone size={14} style={{ verticalAlign: 'middle' }} /> {selectedContact.phone || 'N/A'}</div>
-                  {(() => {
+                
+                {/* Improved Contact Summary Card */}
+                {(() => {
                     const entries = khataEntries.filter(e => e.contact_id === selectedContact.id);
                     const totalGave = entries.filter(e => e.type === 'give').reduce((s,e) => s + Number(e.amount), 0);
                     const totalTook = entries.filter(e => e.type === 'take').reduce((s,e) => s + Number(e.amount), 0);
                     const bal = totalGave - totalTook;
                     return (
-                      <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px', marginBottom: '12px' }}>
-                          <div><div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>{t.totalGave}</div><div style={{ fontWeight: '700', color: '#10b981' }}>{money(totalGave)}</div></div>
-                          <div><div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>{t.totalTook}</div><div style={{ fontWeight: '700', color: '#ef4444' }}>{money(totalTook)}</div></div>
+                      <div style={{ background: 'rgba(255,255,255,0.05)', padding: '20px', borderRadius: '16px', textAlign: 'center', marginBottom: '16px' }}>
+                        <h3 style={{ fontSize: '20px', color: 'white', marginBottom: '4px', fontWeight: '800' }}>{selectedContact.name}</h3>
+                        <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.6)', marginBottom: '16px' }}><Phone size={14} style={{ verticalAlign: 'middle' }} /> {selectedContact.phone || 'N/A'}</div>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '12px', marginBottom: '16px' }}>
+                          <div>
+                            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>{t.totalGave}</div>
+                            <div style={{ fontWeight: '700', color: '#10b981', fontSize: '15px' }}>{money(totalGave)}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>{t.totalTook}</div>
+                            <div style={{ fontWeight: '700', color: '#ef4444', fontSize: '15px' }}>{money(totalTook)}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', marginBottom: '4px' }}>{t.remaining}</div>
+                            <div style={{ fontWeight: '700', color: bal > 0 ? '#10b981' : bal < 0 ? '#ef4444' : 'white', fontSize: '15px' }}>{money(Math.abs(bal))}</div>
+                          </div>
                         </div>
-                        {bal > 0 && <div style={{ fontSize: '20px', fontWeight: '800', color: '#10b981' }}>{t.youWillGet}: {money(bal)}</div>}
-                        {bal < 0 && <div style={{ fontSize: '20px', fontWeight: '800', color: '#ef4444' }}>{t.youWillGive}: {money(Math.abs(bal))}</div>}
-                        {bal === 0 && <div style={{ fontSize: '18px', fontWeight: '700', color: 'rgba(255,255,255,0.7)' }}>{t.settled}</div>}
-                      </>
+
+                        {bal > 0 && <div style={{ fontSize: '20px', fontWeight: '800', color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '10px', borderRadius: '8px' }}>{t.youWillGet}: {money(bal)}</div>}
+                        {bal < 0 && <div style={{ fontSize: '20px', fontWeight: '800', color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '8px' }}>{t.youWillGive}: {money(Math.abs(bal))}</div>}
+                        {bal === 0 && <div style={{ fontSize: '18px', fontWeight: '700', color: 'rgba(255,255,255,0.7)', background: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '8px' }}>{t.settled}</div>}
+                      </div>
                     )
                   })()}
-                </div>
+
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <h4 style={{ fontSize: '16px', color: 'white', margin: 0 }}>{t.entryHistory}</h4>
                   <button onClick={() => setModal('khataEntry')} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}><Plus size={14} /> {t.addEntry}</button>
