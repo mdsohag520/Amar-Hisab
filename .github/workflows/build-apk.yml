@@ -39,42 +39,6 @@ jobs:
       run: |
         mkdir -p android-app
         echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android-app/android.keystore
-        ls -la android-app/android.keystore
-
-    - name: Create TWA Manifest
-      run: |
-        cd android-app
-        cat > twa-manifest.json <<'CONFIG'
-        {
-          "packageId": "com.sohag.amarhisab",
-          "host": "amar-hisab.sohag18267.workers.dev",
-          "name": "আমার হিসাব",
-          "launcherName": "আমার হিসাব",
-          "display": "standalone",
-          "themeColor": "#059669",
-          "backgroundColor": "#0f172a",
-          "startUrl": "/",
-          "iconUrl": "https://amar-hisab.sohag18267.workers.dev/pwa-512x512.png",
-          "maskableIconUrl": "https://amar-hisab.sohag18267.workers.dev/pwa-512x512.png",
-          "signingKey": {
-            "path": "./android.keystore",
-            "alias": "${{ secrets.KEY_ALIAS }}"
-          },
-          "appVersionName": "1.0.0",
-          "appVersionCode": 1,
-          "shortcuts": [],
-          "generatorApp": "bubblewrap-cli",
-          "webManifestUrl": "https://amar-hisab.sohag18267.workers.dev/manifest.webmanifest",
-          "fallbackType": "customtabs",
-          "features": {},
-          "enableNotifications": false,
-          "isChromeOSOnly": false,
-          "isMetaQuest": false,
-          "fullScopeUrl": "https://amar-hisab.sohag18267.workers.dev/",
-          "minSdkVersion": 19,
-          "orientation": "portrait"
-        }
-        CONFIG
 
     - name: Generate Android Project
       env:
@@ -83,15 +47,27 @@ jobs:
       run: |
         cd android-app
         bubblewrap init \
-          --manifest=twa-manifest.json \
+          --manifest=https://raw.githubusercontent.com/mdsohag520/Amar-Hisab/main/twa-manifest.json \
           --directory=. \
           --skipPwaValidation \
           --jdkPath "$JAVA_HOME"
+
+    - name: Update Signing Config
+      env:
+        BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        BUBBLEWRAP_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      run: |
+        cd android-app
+        if [ -f "app/build.gradle" ]; then
+          sed -i "s|signingConfigs {|signingConfigs {\n        release {\n            storeFile file(\"../android.keystore\")\n            storePassword System.getenv(\"BUBBLEWRAP_KEYSTORE_PASSWORD\")\n            keyAlias System.getenv(\"BUBBLEWRAP_KEY_ALIAS\")\n            keyPassword System.getenv(\"BUBBLEWRAP_KEY_PASSWORD\")\n        }|" app/build.gradle
+        fi
 
     - name: Build AAB and APK
       env:
         BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        BUBBLEWRAP_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       run: |
         cd android-app
         bubblewrap build --skipPwaValidation
