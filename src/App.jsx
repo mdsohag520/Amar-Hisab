@@ -616,18 +616,16 @@ function App() {
 
   if (authLoading) return <div style={{ display: 'flex', height: '100vh', justifyContent: 'center', alignItems: 'center' }}><Loader2 className="spin" style={{ color: 'white' }} /></div>
 
-  // --- NEW AUTH UI ---
   if (!session) {
     return (
-      <div className="auth-container" style={{ background: 'transparent' }}>
-        {/* Language Toggle Top Right */}
+      <div className="auth-container">
         <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 10 }}>
             <button className="language-button" onClick={() => setLang(lang === 'BN' ? 'EN' : 'BN')} style={{ background: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.2)', color: 'white' }}>
               <Globe size={17} /> {lang === 'BN' ? 'বাংলা' : 'English'}
             </button>
         </div>
 
-        <div className="auth-card" style={{ background: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}>
+        <div className="auth-card">
           <div style={{ textAlign: 'center', marginBottom: '30px' }}>
              <div className="brand-icon" style={{ margin: '0 auto 15px', width: '60px', height: '60px' }}><Wallet size={32} /></div>
              <h2 style={{ color: 'white', fontSize: '26px', fontWeight: '800' }}>{t.appName}</h2>
@@ -679,7 +677,6 @@ function App() {
 
   return (
     <div className="app-shell">
-      {/* ... Rest of the app remains exactly the same ... */}
       <main className="main-content">
         <header className="topbar">
           <div className="mobile-brand">
@@ -696,8 +693,7 @@ function App() {
 
         {activePage === 'dashboard' && (
           <div style={{ padding: '16px' }}>
-             {/* ... Dashboard code remains same ... */}
-             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
               <div>
                 <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', margin: 0 }}>{t.welcome} 👋</h2>
                 <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.7)', margin: '4px 0 0 0' }}>{t.welcomeSubtitle}</p>
@@ -776,7 +772,6 @@ function App() {
           </div>
         )}
 
-        {/* ... All other pages and modals (transactions, debts, khata, reports, settings) exactly as before ... */}
         {activePage === 'transactions' && (
           <div style={{ padding: '16px' }}>
              <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', marginBottom: '16px' }}>{t.transactions}</h2>
@@ -825,6 +820,7 @@ function App() {
              {debts.map(d => {
                 const remaining = Number(d.amount) - Number(d.paid_amount)
                 const isPaid = remaining <= 0
+                const debtPayments = payments.filter(p => p.debt_id === d.id)
                 return (
                   <div key={d.id} style={{ background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '16px', marginBottom: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -841,6 +837,7 @@ function App() {
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       {!isPaid && <button onClick={() => setPaymentModal(d)} style={{ flex: 1, background: 'rgba(16,185,129,0.2)', color: '#10b981', border: 'none', padding: '10px', borderRadius: '10px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><CheckCircle size={16} /> {t.payNow}</button>}
+                      <button onClick={() => setHistoryModal({debt: d, history: debtPayments})} style={{ background: 'rgba(59,130,246,0.2)', color: '#3b82f6', border: 'none', padding: '10px', borderRadius: '10px' }}><History size={18} /></button>
                       <button onClick={() => openEditDebtModal(d)} style={{ background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none', padding: '10px', borderRadius: '10px' }}><Pencil size={18} /></button>
                       <button onClick={() => confirmDeleteDebt(d.id)} style={{ background: 'rgba(239,68,68,0.2)', color: '#ef4444', border: 'none', padding: '10px', borderRadius: '10px' }}><Trash2 size={18} /></button>
                     </div>
@@ -1143,6 +1140,33 @@ function App() {
           <button type="submit" style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', color: 'white', padding: '14px', borderRadius: '12px', border: 'none', fontWeight: '700' }}>{t.save}</button>
         </form>
       </BottomSheet>
+
+      {/* History Modal */}
+      {historyModal && (
+        <div className="center-modal-overlay" onClick={() => setHistoryModal(null)}>
+            <div className="center-modal-content" onClick={e => e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h3 style={{ fontSize: '18px', color: 'white', margin: 0 }}>{t.paymentHistory} - {historyModal.debt.person_name}</h3>
+                    <button onClick={() => setHistoryModal(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: '32px', height: '32px', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
+                </div>
+                {historyModal.history.length === 0 ? (
+                    <div className="empty-state" style={{ padding: '20px' }}>{t.noPaymentHistory}</div>
+                ) : (
+                    <div style={{ maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {historyModal.history.map(p => (
+                            <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(0,0,0,0.2)', borderRadius: '8px' }}>
+                                <div>
+                                    <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>{p.payment_date}</div>
+                                    <div style={{ fontWeight: 'bold', fontSize: '15px', color: 'white' }}>{money(p.amount)}</div>
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#10b981' }}>Success</div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+      )}
 
       <ConfirmDialog 
         isOpen={deleteDialog.isOpen} 
