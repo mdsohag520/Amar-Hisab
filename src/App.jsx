@@ -54,7 +54,8 @@ const translations = {
     descriptionPlaceholder: 'বিবরণ লিখুন...', settled: 'হিসাব সমান', confirmDeleteTitle: 'মুছে ফেলতে চান?', confirmDeleteMsg: 'আপনি কি নিশ্চিত? এই কাজটি ফিরিয়ে আনা সম্ভব নয়।',
     forgotPassword: 'পাসওয়ার্ড ভুলে গেছেন?', resetPasswordTitle: 'পাসওয়ার্ড রিসেট করুন', sendResetLink: 'রিসেট লিংক পাঠান', changePassword: 'পাসওয়ার্ড পরিবর্তন করুন', newPassword: 'নতুন পাসওয়ার্ড', updatePasswordBtn: 'পাসওয়ার্ড আপডেট করুন', profileSettings: 'প্রোফাইল সেটিংস', fullName: 'পুরো নাম', updateProfile: 'প্রোফাইল আপডেট করুন',
     verifyEmailMsg: 'আপনার ইমেইলে একটি ভেরিফিকেশন লিংক পাঠানো হয়েছে। অনুগ্রহ করে লিংকে ক্লিক করে লগইন করুন।',
-    resetEmailSent: 'পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হয়েছে!', backToLogin: 'লগইনে ফিরে যান'
+    resetEmailSent: 'পাসওয়ার্ড রিসেট লিংক আপনার ইমেইলে পাঠানো হয়েছে!', backToLogin: 'লগইনে ফিরে যান',
+    editPayment: 'পরিশোধ এডিট করুন'
   },
   EN: {
     appName: 'Amar Hisab', appTagline: 'AMAR HISAB', brandSubtext: 'Your money, your control', brandSubtext2: 'Keep your finances organized.',
@@ -91,7 +92,8 @@ const translations = {
     descriptionPlaceholder: 'Enter description...', settled: 'Settled', confirmDeleteTitle: 'Delete Item?', confirmDeleteMsg: 'Are you sure? This action cannot be undone.',
     forgotPassword: 'Forgot Password?', resetPasswordTitle: 'Reset Password', sendResetLink: 'Send Reset Link', changePassword: 'Change Password', newPassword: 'New Password', updatePasswordBtn: 'Update Password', profileSettings: 'Profile Settings', fullName: 'Full Name', updateProfile: 'Update Profile',
     verifyEmailMsg: 'A verification link has been sent to your email. Please click the link to login.',
-    resetEmailSent: 'Password reset link sent to your email!', backToLogin: 'Back to Login'
+    resetEmailSent: 'Password reset link sent to your email!', backToLogin: 'Back to Login',
+    editPayment: 'Edit Payment'
   },
 }
 
@@ -134,6 +136,7 @@ function App() {
   const [modal, setModal] = useState('') 
   const [paymentModal, setPaymentModal] = useState(null) 
   const [historyModal, setHistoryModal] = useState(null) 
+  const [editingPayment, setEditingPayment] = useState(null) 
   
   const [toast, setToast] = useState({ isOpen: false, message: '', type: 'info' })
   const [deleteDialog, setDeleteDialog] = useState({ isOpen: false, onConfirm: null, message: '' })
@@ -326,6 +329,35 @@ function App() {
     })
   }
 
+  function confirmDeletePayment(id) {
+    setDeleteDialog({
+      isOpen: true, message: t.confirmDeleteMsg,
+      onConfirm: async () => {
+        // 1. Find payment to subtract amount
+        const payment = payments.find(p => p.id === id)
+        if (!payment) return
+
+        // 2. Delete payment record
+        const { error: delError } = await supabase.from('debt_payments').delete().eq('id', id)
+        if (delError) return showToast(delError.message, 'error')
+
+        // 3. Update Debt paid_amount
+        const debt = debts.find(d => d.id === payment.debt_id)
+        if (debt) {
+            const newPaid = Number(debt.paid_amount) - Number(payment.amount)
+            const { error: updError } = await supabase.from('debts').update({ paid_amount: newPaid }).eq('id', debt.id)
+            if (updError) showToast(updError.message, 'error')
+            else { setDebts(prev => prev.map(d => d.id === debt.id ? {...d, paid_amount: newPaid} : d)) }
+        }
+
+        // 4. Update UI state
+        setPayments(prev => prev.filter(p => p.id !== id))
+        setHistoryModal(prev => prev ? { ...prev, history: prev.history.filter(p => p.id !== id) } : null)
+        showToast(lang === 'BN' ? 'পরিশোধ মুছে ফেলা হয়েছে' : 'Payment deleted')
+      }
+    })
+  }
+
   function confirmDeleteCategory(id) {
     setDeleteDialog({
       isOpen: true, message: t.confirmDeleteMsg,
@@ -381,11 +413,18 @@ function App() {
     setModal('khataEntry'); setEditingKhataEntryId(entry.id); setKhataContactId(entry.contact_id); setKhataEntryType(entry.type); setAmount(entry.amount); setNote(entry.note || ''); setDate(entry.date); setKhataDueDate(entry.due_date || '')
   }
 
+  function openEditPaymentModal(payment) {
+    setEditingPayment(payment)
+    setPaymentAmount(payment.amount)
+    setPaymentDateRecord(payment.payment_date)
+  }
+
   function closeModal() {
-    setModal(''); setEditingId(null); setEditingDebtId(null); setEditingContactId(null); setEditingKhataEntryId(null)
+    setModal(''); setEditingId(null); setEditingDebtId(null); setEditingContactId(null); setEditingKhataEntryId(null); setEditingPayment(null)
     setAmount(''); setNote(''); setCategory('other'); setDate(new Date().toISOString().slice(0, 10))
     setDebtPerson(''); setDebtType('receivable'); setDebtNote(''); setDebtDate(new Date().toISOString().slice(0, 10)); setDebtDueDate('')
     setContactName(''); setContactPhone(''); setKhataEntryType('give'); setKhataContactId(''); setKhataDueDate('')
+    setPaymentAmount(''); setPaymentDateRecord(new Date().toISOString().slice(0, 10))
   }
 
   const filteredByPeriodTransactions = useMemo(() => {
@@ -514,21 +553,66 @@ function App() {
     e.preventDefault()
     const payVal = Number(paymentAmount)
     if (!Number.isFinite(payVal) || payVal <= 0) return
-    const currentDebt = paymentModal
-    const newPaidAmount = Number(currentDebt.paid_amount) + payVal
-    if (newPaidAmount > Number(currentDebt.amount)) return showToast(lang === 'BN' ? 'পরিশোধের পরিমাণ মূল টাকার চেয়ে বেশি হতে পারে না!' : 'Payment cannot exceed the total amount!', 'error')
+    
+    if (editingPayment) {
+        // Editing existing payment
+        const oldPayment = payments.find(p => p.id === editingPayment.id)
+        if (!oldPayment) return
+        const debt = debts.find(d => d.id === oldPayment.debt_id)
+        if (!debt) return
 
-    const { data: updatedDebt, error: debtError } = await supabase.from('debts').update({ paid_amount: newPaidAmount }).eq('id', currentDebt.id).select()
-    if (debtError) return showToast(debtError.message, 'error')
+        const newDebtPaidAmount = Number(debt.paid_amount) - Number(oldPayment.amount) + payVal
+        if (newDebtPaidAmount > Number(debt.amount)) return showToast(lang === 'BN' ? 'পরিশোধের পরিমাণ মূল টাকার চেয়ে বেশি হতে পারে না!' : 'Payment cannot exceed the total amount!', 'error')
 
-    const payRecord = { debt_id: currentDebt.id, user_id: session.user.id, amount: payVal, payment_date: paymentDateRecord }
-    const { data: newPayment, error: payError } = await supabase.from('debt_payments').insert([payRecord]).select()
-    if (payError) return showToast(payError.message, 'error')
+        // 1. Update Payment record
+        const { error: payError } = await supabase.from('debt_payments').update({ amount: payVal, payment_date: paymentDateRecord }).eq('id', editingPayment.id)
+        if (payError) return showToast(payError.message, 'error')
 
-    setDebts(prev => prev.map(d => d.id === currentDebt.id ? updatedDebt[0] : d))
-    setPayments(prev => [newPayment[0], ...prev])
-    setPaymentModal(null); setPaymentAmount(''); setPaymentDateRecord(new Date().toISOString().slice(0, 10))
-    showToast(lang === 'BN' ? 'পরিশোধ সফলভাবে রেকর্ড করা হয়েছে!' : 'Payment recorded successfully!')
+        // 2. Update Debt paid_amount
+        const { error: debtError } = await supabase.from('debts').update({ paid_amount: newDebtPaidAmount }).eq('id', debt.id)
+        if (debtError) return showToast(debtError.message, 'error')
+
+        // 3. Update UI
+        setPayments(prev => prev.map(p => p.id === editingPayment.id ? { ...p, amount: payVal, payment_date: paymentDateRecord } : p))
+        setDebts(prev => prev.map(d => d.id === debt.id ? { ...d, paid_amount: newDebtPaidAmount } : d))
+        
+        if (historyModal) {
+            setHistoryModal(prev => ({
+                ...prev,
+                history: prev.history.map(p => p.id === editingPayment.id ? { ...p, amount: payVal, payment_date: paymentDateRecord } : p)
+            }))
+        }
+        
+        setEditingPayment(null)
+        setPaymentAmount('')
+        setPaymentDateRecord(new Date().toISOString().slice(0, 10))
+        showToast(lang === 'BN' ? 'পরিশোধ আপডেট হয়েছে!' : 'Payment updated!')
+    } else {
+        // Adding new payment
+        const currentDebt = paymentModal
+        const newPaidAmount = Number(currentDebt.paid_amount) + payVal
+        if (newPaidAmount > Number(currentDebt.amount)) return showToast(lang === 'BN' ? 'পরিশোধের পরিমাণ মূল টাকার চেয়ে বেশি হতে পারে না!' : 'Payment cannot exceed the total amount!', 'error')
+
+        const { data: updatedDebt, error: debtError } = await supabase.from('debts').update({ paid_amount: newPaidAmount }).eq('id', currentDebt.id).select()
+        if (debtError) return showToast(debtError.message, 'error')
+
+        const payRecord = { debt_id: currentDebt.id, user_id: session.user.id, amount: payVal, payment_date: paymentDateRecord }
+        const { data: newPayment, error: payError } = await supabase.from('debt_payments').insert([payRecord]).select()
+        if (payError) return showToast(payError.message, 'error')
+
+        setDebts(prev => prev.map(d => d.id === currentDebt.id ? updatedDebt[0] : d))
+        setPayments(prev => [newPayment[0], ...prev])
+        
+        if (historyModal) {
+            setHistoryModal(prev => ({
+                ...prev,
+                history: [newPayment[0], ...prev.history]
+            }))
+        }
+        
+        setPaymentModal(null); setPaymentAmount(''); setPaymentDateRecord(new Date().toISOString().slice(0, 10))
+        showToast(lang === 'BN' ? 'পরিশোধ সফলভাবে রেকর্ড করা হয়েছে!' : 'Payment recorded successfully!')
+    }
   }
 
   async function handleAddCategory(e) {
@@ -1128,13 +1212,15 @@ function App() {
         </form>
       </BottomSheet>
 
-      {/* Payment Modal */}
-      <BottomSheet isOpen={!!paymentModal} onClose={() => setPaymentModal(null)} title={`${t.payNow} - ${paymentModal?.person_name}`}>
+      {/* Payment Modal (Add/Edit) */}
+      <BottomSheet isOpen={!!paymentModal || !!editingPayment} onClose={() => { setPaymentModal(null); setEditingPayment(null) }} title={editingPayment ? t.editPayment : `${t.payNow} - ${paymentModal?.person_name}`}>
         <form onSubmit={handlePayment} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px', color: 'white' }}>
-             <div>{t.mainAmount}: {money(paymentModal?.amount || 0)}</div>
-             <div>{t.paidAmount}: {money(paymentModal?.paid_amount || 0)}</div>
-          </div>
+          {!editingPayment && (
+            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px', color: 'white' }}>
+              <div>{t.mainAmount}: {money(paymentModal?.amount || 0)}</div>
+              <div>{t.paidAmount}: {money(paymentModal?.paid_amount || 0)}</div>
+            </div>
+          )}
           <input required type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder={t.paymentAmount} style={{ padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white' }} />
           <input required type="date" value={paymentDateRecord} onChange={e => setPaymentDateRecord(e.target.value)} style={{ padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white' }} />
           <button type="submit" style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dark))', color: 'white', padding: '14px', borderRadius: '12px', border: 'none', fontWeight: '700' }}>{t.save}</button>
@@ -1159,7 +1245,10 @@ function App() {
                                     <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>{p.payment_date}</div>
                                     <div style={{ fontWeight: 'bold', fontSize: '15px', color: 'white' }}>{money(p.amount)}</div>
                                 </div>
-                                <div style={{ fontSize: '12px', color: '#10b981' }}>Success</div>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <button onClick={() => openEditPaymentModal(p)} style={{ background: 'rgba(59,130,246,0.2)', border: 'none', borderRadius: '8px', padding: '6px', color: '#3b82f6', cursor: 'pointer' }}><Pencil size={16} /></button>
+                                    <button onClick={() => confirmDeletePayment(p.id)} style={{ background: 'rgba(239,68,68,0.2)', border: 'none', borderRadius: '8px', padding: '6px', color: '#ef4444', cursor: 'pointer' }}><Trash2 size={16} /></button>
+                                </div>
                             </div>
                         ))}
                     </div>
