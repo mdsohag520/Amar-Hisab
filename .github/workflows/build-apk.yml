@@ -47,7 +47,7 @@ jobs:
       run: |
         cd android-app
         bubblewrap init \
-          --manifest=https://raw.githubusercontent.com/mdsohag520/Amar-Hisab/main/twa-manifest.json \
+          --manifest=https://amar-hisab.sohag18267.workers.dev/twa-manifest.json \
           --directory=. \
           --skipPwaValidation \
           --jdkPath "$JAVA_HOME"
