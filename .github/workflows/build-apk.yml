@@ -82,7 +82,7 @@ jobs:
         BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
         cd android-app
-        bubblewrap generate \
+        bubblewrap init \
           --manifest=twa-manifest.json \
           --directory=. \
           --skipPwaValidation \
