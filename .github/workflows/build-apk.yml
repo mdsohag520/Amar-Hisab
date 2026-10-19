@@ -1,0 +1,53 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install Bubblewrap CLI
+      run: npm install -g @bubblewrap/cli
+
+    - name: Create Bubblewrap Project
+      run: |
+        mkdir android-app
+        cd android-app
+        yes | bubblewrap init --manifest=https://amar-hisab.sohag18267.workers.dev/manifest.webmanifest --directory=. || true
+
+    - name: Create Keystore
+      run: |
+        cd android-app
+        keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Amar Hisab, OU=Dev, O=Amar Hisab, L=Dhaka, S=Dhaka, C=BD"
+        sed -i 's/signingKey { storeFile file(".\/android.keystore")/signingKey { storeFile file("android.keystore")/' app/build.gradle
+        sed -i 's/storePassword ".*"/storePassword "password123"/' app/build.gradle
+        sed -i 's/keyPassword ".*"/keyPassword "password123"/' app/build.gradle
+        sed -i 's/keyAlias ".*"/keyAlias "android"/' app/build.gradle
+
+    - name: Build APK
+      run: |
+        cd android-app
+        bubblewrap build --skipPwaValidation
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release-signed
+        path: android-app/app-release-signed.apk
