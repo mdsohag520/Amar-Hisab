@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android AAB & APK
 
 on:
   push:
@@ -27,32 +27,24 @@ jobs:
     - name: Install Bubblewrap CLI
       run: npm install -g @bubblewrap/cli
 
-    - name: Create Bubblewrap Config File
+    - name: Setup Android SDK Path
       run: |
-        # Use pre-installed Android SDK from GitHub runner
         export ANDROID_HOME=/usr/local/lib/android/sdk
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
         mkdir -p $HOME/.bubblewrap
         echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > $HOME/.bubblewrap/config.json
-        cat $HOME/.bubblewrap/config.json
 
-    - name: Verify Bubblewrap Paths
-      run: |
-        export ANDROID_HOME=/usr/local/lib/android/sdk
-        bubblewrap doctor || true
-
-    - name: Create Keystore
+    - name: Decode Keystore from Secrets
       run: |
         mkdir -p android-app
-        cd android-app
-        keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 -storepass password123 -keypass password123 -dname "CN=Amar Hisab, OU=Dev, O=Amar Hisab, L=Dhaka, ST=Dhaka, C=BD"
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android-app/android.keystore
+        ls -la android-app/android.keystore
 
-    - name: Init Bubblewrap Project
-      env:
-        BUBBLEWRAP_KEYSTORE_PASSWORD: password123
-        BUBBLEWRAP_KEY_PASSWORD: password123
+    - name: Create TWA Manifest
       run: |
         cd android-app
-        cat > bubblewrap.config.json <<'CONFIG'
+        cat > twa-manifest.json <<'CONFIG'
         {
           "packageId": "com.sohag.amarhisab",
           "host": "amar-hisab.sohag18267.workers.dev",
@@ -66,7 +58,7 @@ jobs:
           "maskableIconUrl": "https://amar-hisab.sohag18267.workers.dev/pwa-512x512.png",
           "signingKey": {
             "path": "./android.keystore",
-            "alias": "android"
+            "alias": "${{ secrets.KEY_ALIAS }}"
           },
           "appVersionName": "1.0.0",
           "appVersionCode": 1,
@@ -83,15 +75,33 @@ jobs:
           "orientation": "portrait"
         }
         CONFIG
-        bubblewrap init --config=bubblewrap.config.json --directory=. --skipPwaValidation
 
-    - name: Build APK
+    - name: Generate Android Project
       env:
-        BUBBLEWRAP_KEYSTORE_PASSWORD: password123
-        BUBBLEWRAP_KEY_PASSWORD: password123
+        BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      run: |
+        cd android-app
+        bubblewrap generate \
+          --manifest=twa-manifest.json \
+          --directory=. \
+          --skipPwaValidation \
+          --jdkPath "$JAVA_HOME"
+
+    - name: Build AAB and APK
+      env:
+        BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       run: |
         cd android-app
         bubblewrap build --skipPwaValidation
+
+    - name: Upload AAB Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release-bundle
+        path: android-app/app-release-bundle.aab
+        if-no-files-found: error
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
