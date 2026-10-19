@@ -41,11 +41,14 @@ jobs:
     - name: Install Bubblewrap CLI
       run: npm install -g @bubblewrap/cli
 
-    - name: Bubblewrap Global Config
+    - name: Create Bubblewrap Config with Explicit Paths
       run: |
         mkdir -p $HOME/.bubblewrap
-        echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > $HOME/.bubblewrap/config.json
+        echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$HOME/android-sdk\"}" > $HOME/.bubblewrap/config.json
         cat $HOME/.bubblewrap/config.json
+
+    - name: Verify Bubblewrap Config
+      run: bubblewrap doctor || true
 
     - name: Create Keystore
       run: |
