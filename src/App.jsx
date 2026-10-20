@@ -146,7 +146,6 @@ function App() {
   const [editingContactId, setEditingContactId] = useState(null)
   const [editingKhataEntryId, setEditingKhataEntryId] = useState(null)
   
-  const [searchQuery, setSearchQuery] = useState('')
   const [filter, setFilter] = useState(localStorage.getItem('amar_filter') || 'all')
   const [search, setSearch] = useState('')
   
@@ -448,18 +447,10 @@ function App() {
   const totalPayable = debts.filter(d => d.type === 'payable').reduce((s, d) => s + (Number(d.amount) - Number(d.paid_amount)), 0)
 
   const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
-    const matchesType = filter === 'all' || item.type === filter;
-    if (!searchQuery) {
-      return matchesType;
-    }
-    const q = searchQuery.toLowerCase();
-    const titleMatch = (item.title || '').toLowerCase().includes(q);
-    const catMatch = (getCategoryDisplayName(item.category) || '').toLowerCase().includes(q);
-    const amountMatch = String(item.amount).includes(q);
-    const dateMatch = (item.date || '').includes(q);
-    const noteMatch = (item.note || '').toLowerCase().includes(q);
-    return matchesType && (titleMatch || catMatch || amountMatch || dateMatch || noteMatch);
-  });
+    const matchesType = filter === 'all' || item.type === filter
+    const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase())
+    return matchesType && matchesSearch
+  })
 
   // Helper to calculate contact specific stats
   const getContactStats = (contactId) => {
@@ -779,7 +770,7 @@ function App() {
       <main className="main-content">
         <header className="topbar">
           <div className="mobile-brand">
-            <div className="brand-icon"><img src="/pwa-192x192.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }} /></div><strong style={{ color: 'var(--text-main)', fontSize: '18px' }}>{t.appName}</strong>
+            <div className="brand-icon"><Wallet size={22} /></div><strong style={{ color: 'var(--text-main)', fontSize: '18px' }}>{t.appName}</strong>
           </div>
           <div className="top-actions">
             <button className="language-button" onClick={() => setLang(lang === 'BN' ? 'EN' : 'BN')} style={{ background: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.2)', color: 'white' }}>
@@ -850,14 +841,6 @@ function App() {
               </button>
             </div>
 
-            <div style={{ display: "flex", gap: "8px", marginBottom: "24px", overflowX: "auto", paddingBottom: "4px" }}>
-              {["daily", "monthly", "yearly", "allTime"].map(period => (
-                <button key={period} onClick={() => setReportPeriod(period)} style={{ padding: "8px 16px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.2)", background: reportPeriod === period ? "rgba(16, 185, 129, 0.8)" : "rgba(255,255,255,0.05)", color: "white", fontSize: "13px", cursor: "pointer", fontWeight: "600", whiteSpace: "nowrap" }}>
-                  {t[period]}
-                </button>
-              ))}
-            </div>
-
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'white', margin: 0 }}>{t.recent}</h3>
               <button onClick={() => setActivePage('transactions')} style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: '600', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>{t.seeAll} <ChevronRight size={16} /></button>
@@ -886,34 +869,42 @@ function App() {
                {['all', 'income', 'expense'].map(key => (
                  <button key={key} onClick={() => setFilter(key)} style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.2)', background: filter === key ? 'rgba(255,255,255,0.3)' : 'transparent', color: 'white', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>{t[key]}</button>
                ))}
-             <div style={{ marginBottom: "16px" }}>
-               <input 
-                 type="text" 
-                 placeholder={t.search || "Search transactions..."} 
-                 value={searchQuery} 
-                 onChange={(e) => setSearchQuery(e.target.value)} 
-                 style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white", fontSize: "14px", outline: "none", boxSizing: "border-box" }} 
-               />
              </div>
-             </div>
-             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {finalDisplayTransactions.map(item => (
-                <div key={item.id} style={{ background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: item.type === 'income' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.type === 'income' ? '#10b981' : '#ef4444' }}>
-                    {item.type === 'income' ? <TrendingUp size={20} /> : <ReceiptText size={20} />}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {Object.entries(
+                finalDisplayTransactions.reduce((groups, item) => {
+                  const date = item.date;
+                  if (!groups[date]) groups[date] = [];
+                  groups[date].push(item);
+                  return groups;
+                }, {})
+              ).sort((a, b) => new Date(b[0]) - new Date(a[0]))
+              .map(([date, items]) => (
+                <div key={date} style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#9ca3af', marginBottom: '8px', paddingLeft: '4px' }}>
+                    {date}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: '600', color: 'white', fontSize: '15px' }}>{item.title}</div>
-                    <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>{getCategoryDisplayName(item.category)} • {item.date}</div>
-                  </div>
-                  <div style={{ fontWeight: '700', color: item.type === 'income' ? '#10b981' : 'white', fontSize: '16px', marginRight: '8px' }}>{item.type === 'income' ? '+' : '−'}{money(item.amount)}</div>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    <button onClick={() => openEditModal(item)} style={{ background: 'none', border: 'none', color: 'var(--primary)' }}><Pencil size={18} /></button>
-                    <button onClick={() => confirmDeleteTransaction(item.id)} style={{ background: 'none', border: 'none', color: '#ef4444' }}><Trash2 size={18} /></button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {items.map(item => (
+                      <div key={item.id} style={{ background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: item.type === 'income' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.type === 'income' ? '#10b981' : '#ef4444' }}>
+                          {item.type === 'income' ? <TrendingUp size={20} /> : <ReceiptText size={20} />}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: '600', color: 'white', fontSize: '15px' }}>{item.title}</div>
+                          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>{getCategoryDisplayName(item.category)} • {item.date}</div>
+                        </div>
+                        <div style={{ fontWeight: '700', color: item.type === 'income' ? '#10b981' : 'white', fontSize: '16px', marginRight: '8px' }}>{item.type === 'income' ? '+' : '−'}{money(item.amount)}</div>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button onClick={() => openEditModal(item)} style={{ background: 'none', border: 'none', color: 'var(--primary)' }}><Pencil size={18} /></button>
+                          <button onClick={() => confirmDeleteTransaction(item.id)} style={{ background: 'none', border: 'none', color: '#ef4444' }}><Trash2 size={18} /></button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
-             </div>
+            </div>
           </div>
         )}
 
@@ -1088,7 +1079,7 @@ function App() {
               <div style={{ width: '100%', height: 250 }}>
                 <ResponsiveContainer>
                   <PieChart>
-                    <Pie data={expenseChartData.length > 0 ? expenseChartData : [{name: "No Data", value: 1}]} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value" stroke="none">
+                    <Pie data={expenseChartData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value" stroke="none">
                       {expenseChartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
