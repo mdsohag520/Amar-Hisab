@@ -11,6 +11,8 @@ import {
 } from 'recharts'
 import { supabase } from './supabase'
 import './App.css'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 // Import components
 import GlassBubble from './components/GlassBubble'
@@ -511,6 +513,55 @@ function App() {
 
   const COLORS = ['#10b981', '#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316']
 
+  const downloadPDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Title
+    doc.setFontSize(20);
+    doc.setTextColor(16, 185, 129);
+    doc.text('Amar Hisab - Transaction Report', pageWidth / 2, 20, { align: 'center' });
+    
+    // Subtitle (Period and Date)
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    const periodText = `Period: ${t[reportPeriod] || reportPeriod.toUpperCase()} | Generated: ${new Date().toLocaleDateString()}`;
+    doc.text(periodText, pageWidth / 2, 28, { align: 'center' });
+    
+    // Table Data
+    const tableData = finalDisplayTransactions.map(item => [
+      item.date,
+      item.title,
+      getCategoryDisplayName(item.category),
+      item.type === 'income' ? 'Income' : 'Expense',
+      (item.type === 'income' ? '+' : '-') + money(item.amount)
+    ]);
+
+    autoTable(doc, {
+      startY: 35,
+      head: [['Date', 'Description', 'Category', 'Type', 'Amount']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [16, 185, 129], textColor: 255 },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        4: { halign: 'right' }
+      }
+    });
+
+    // Summary
+    const finalY = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(12);
+    doc.setTextColor(0);
+    doc.text(`Total Income: ${money(income)}`, 14, finalY);
+    doc.text(`Total Expense: ${money(expense)}`, 14, finalY + 8);
+    doc.text(`Net Savings: ${money(netSavings)}`, 14, finalY + 16);
+
+    doc.save(`Amar_Hisab_${reportPeriod}_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   async function saveTransaction(e) {
     e.preventDefault()
     const value = Number(amount)
@@ -864,7 +915,12 @@ function App() {
 
         {activePage === 'transactions' && (
           <div style={{ padding: '16px' }}>
-             <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', marginBottom: '16px' }}>{t.transactions}</h2>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+               <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', margin: 0 }}>{t.transactions}</h2>
+               <button onClick={downloadPDF} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', boxShadow: '0 4px 10px rgba(16,185,129,0.3)' }}>
+                 <Download size={16} /> PDF
+               </button>
+             </div>
              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px' }}>
                {['all', 'income', 'expense'].map(key => (
                  <button key={key} onClick={() => setFilter(key)} style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.2)', background: filter === key ? 'rgba(255,255,255,0.3)' : 'transparent', color: 'white', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>{t[key]}</button>
