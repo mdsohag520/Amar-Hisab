@@ -446,11 +446,19 @@ function App() {
   const totalReceivable = debts.filter(d => d.type === 'receivable').reduce((s, d) => s + (Number(d.amount) - Number(d.paid_amount)), 0)
   const totalPayable = debts.filter(d => d.type === 'payable').reduce((s, d) => s + (Number(d.amount) - Number(d.paid_amount)), 0)
 
+  const [searchQuery, setSearchQuery] = useState('')
+
   const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
-    const matchesType = filter === 'all' || item.type === filter
-    const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase())
-    return matchesType && matchesSearch
-  })
+    const matchesType = filter === 'all' || item.type === filter;
+    if (!searchQuery) return matchesType;
+    const q = searchQuery.toLowerCase();
+    const titleMatch = (item.title || '').toLowerCase().includes(q);
+    const catMatch = (getCategoryDisplayName(item.category) || '').toLowerCase().includes(q);
+    const amountMatch = String(item.amount).includes(q);
+    const dateMatch = (item.date || '').includes(q);
+    const noteMatch = (item.note || '').toLowerCase().includes(q);
+    return matchesType && (titleMatch || catMatch || amountMatch || dateMatch || noteMatch);
+  });
 
   // Helper to calculate contact specific stats
   const getContactStats = (contactId) => {
@@ -782,7 +790,7 @@ function App() {
         </header>
 
         {activePage === 'dashboard' && (
-          <div style={{ padding: '16px' }}>
+          <div style={{ padding: '16px', paddingBottom: '100px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
               <div>
                 <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', margin: 0 }}>{t.welcome} 👋</h2>
@@ -863,12 +871,22 @@ function App() {
         )}
 
         {activePage === 'transactions' && (
-          <div style={{ padding: '16px' }}>
+          <div style={{ padding: '16px', paddingBottom: '100px' }}>
              <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', marginBottom: '16px' }}>{t.transactions}</h2>
              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px' }}>
                {['all', 'income', 'expense'].map(key => (
                  <button key={key} onClick={() => setFilter(key)} style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.2)', background: filter === key ? 'rgba(255,255,255,0.3)' : 'transparent', color: 'white', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>{t[key]}</button>
                ))}
+             </div>
+
+             <div style={{ marginBottom: '16px' }}>
+               <input 
+                 type="text" 
+                 placeholder={t.search || "Search transactions..."} 
+                 value={searchQuery} 
+                 onChange={(e) => setSearchQuery(e.target.value)} 
+                 style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} 
+               />
              </div>
              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {finalDisplayTransactions.map(item => (
@@ -892,7 +910,7 @@ function App() {
         )}
 
         {activePage === 'debts' && (
-          <div style={{ padding: '16px' }}>
+          <div style={{ padding: '16px', paddingBottom: '100px' }}>
              <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
                 <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.1)', padding: '16px', borderRadius: '16px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
                   <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginBottom: '4px' }}>{t.totalReceivable}</div>
@@ -938,7 +956,7 @@ function App() {
         )}
 
         {activePage === 'khata' && (
-          <div style={{ padding: '16px' }}>
+          <div style={{ padding: '16px', paddingBottom: '100px' }}>
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
               <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '16px', textAlign: 'center' }}>
                 <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)' }}>{t.totalMarketDue}</div>
@@ -1040,7 +1058,7 @@ function App() {
         )}
 
         {activePage === 'reports' && (
-          <div style={{ padding: '16px' }}>
+          <div style={{ padding: '16px', paddingBottom: '100px' }}>
             <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', marginBottom: '16px' }}>{t.financialReport}</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
               <div style={{ background: 'rgba(16,185,129,0.1)', padding: '12px', borderRadius: '12px', textAlign: 'center', border: '1px solid rgba(16,185,129,0.3)' }}>
@@ -1094,7 +1112,7 @@ function App() {
         )}
 
         {activePage === 'settings' && (
-          <div style={{ padding: '16px' }}>
+          <div style={{ padding: '16px', paddingBottom: '100px' }}>
              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '20px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <User size={24} color="white" />
