@@ -1070,7 +1070,7 @@ function App() {
               <div style={{ width: '100%', height: 250 }}>
                 <ResponsiveContainer>
                   <PieChart>
-                    <Pie data={expenseChartData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value" stroke="none">
+                    <Pie data={expenseChartData.length > 0 ? expenseChartData : [{name: "No Data", value: 1}]} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value" stroke="none">
                       {expenseChartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
