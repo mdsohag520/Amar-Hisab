@@ -841,6 +841,14 @@ function App() {
               </button>
             </div>
 
+            <div style={{ display: "flex", gap: "8px", marginBottom: "24px", overflowX: "auto", paddingBottom: "4px" }}>
+              {["daily", "monthly", "yearly", "allTime"].map(period => (
+                <button key={period} onClick={() => setReportPeriod(period)} style={{ padding: "8px 16px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.2)", background: reportPeriod === period ? "rgba(16, 185, 129, 0.8)" : "rgba(255,255,255,0.05)", color: "white", fontSize: "13px", cursor: "pointer", fontWeight: "600", whiteSpace: "nowrap" }}>
+                  {t[period]}
+                </button>
+              ))}
+            </div>
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <h3 style={{ fontSize: '18px', fontWeight: '800', color: 'white', margin: 0 }}>{t.recent}</h3>
               <button onClick={() => setActivePage('transactions')} style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: '600', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>{t.seeAll} <ChevronRight size={16} /></button>
