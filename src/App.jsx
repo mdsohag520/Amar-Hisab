@@ -135,7 +135,10 @@ function App() {
 
   const [loadingData, setLoadingData] = useState(false)
   
-  const [modal, setModal] = useState('') 
+  const [modal, setModal] = useState('')
+  const [pdfModalOpen, setPdfModalOpen] = useState(false)
+  const [pdfPeriod, setPdfPeriod] = useState('allTime')
+  const [pdfSelectedDate, setPdfSelectedDate] = useState(new Date().toISOString().split('T')[0]) 
   const [paymentModal, setPaymentModal] = useState(null) 
   const [historyModal, setHistoryModal] = useState(null) 
   const [editingPayment, setEditingPayment] = useState(null) 
@@ -515,6 +518,17 @@ function App() {
 
   const downloadPDF = () => {
     const doc = new jsPDF();
+    
+    // Filter transactions based on pdfPeriod and pdfSelectedDate
+    const pdfTransactions = transactions.filter(item => {
+      if (pdfPeriod === 'allTime') return true;
+      const itemDate = item.date;
+      const selected = pdfSelectedDate;
+      if (pdfPeriod === 'daily') return itemDate === selected;
+      if (pdfPeriod === 'monthly') return itemDate.slice(0, 7) === selected.slice(0, 7);
+      if (pdfPeriod === 'yearly') return itemDate.slice(0, 4) === selected.slice(0, 4);
+      return true;
+    });
     const pageWidth = doc.internal.pageSize.getWidth();
     
     // Title
@@ -525,11 +539,11 @@ function App() {
     // Subtitle (Period and Date)
     doc.setFontSize(10);
     doc.setTextColor(100);
-    const periodText = `Period: ${reportPeriod.toUpperCase()} | Generated: ${new Date().toLocaleDateString()}`;
+    const periodText = `Period: ${pdfPeriod.toUpperCase()} (${pdfSelectedDate}) | Generated: ${new Date().toLocaleDateString()}`;
     doc.text(periodText, pageWidth / 2, 28, { align: 'center' });
     
     // Table Data
-    const tableData = finalDisplayTransactions.map(item => [
+    const tableData = pdfTransactions.map(item => [
       item.date,
       item.title,
       item.category,
@@ -917,7 +931,7 @@ function App() {
           <div style={{ padding: '16px' }}>
              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', margin: 0 }}>{t.transactions}</h2>
-               <button onClick={downloadPDF} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', boxShadow: '0 4px 10px rgba(16,185,129,0.3)' }}>
+               <button onClick={() => setPdfModalOpen(true)} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', boxShadow: '0 4px 10px rgba(16,185,129,0.3)' }}>
                  <Download size={16} /> PDF
                </button>
              </div>
@@ -1237,6 +1251,40 @@ function App() {
       </div>
 
       {/* Modals & Sheets */}
+      <BottomSheet isOpen={pdfModalOpen} onClose={() => setPdfModalOpen(false)} title="PDF Export Options">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <label style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>Select Period</label>
+          <select value={pdfPeriod} onChange={e => setPdfPeriod(e.target.value)} style={{ padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white' }}>
+            <option value="allTime">All Time (সর্বমোট)</option>
+            <option value="daily">Daily (দৈনিক)</option>
+            <option value="monthly">Monthly (মাসিক)</option>
+            <option value="yearly">Yearly (বার্ষিক)</option>
+          </select>
+
+          {pdfPeriod !== 'allTime' && (
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '8px' }}>
+                {pdfPeriod === 'yearly' ? 'Select Year' : pdfPeriod === 'monthly' ? 'Select Month' : 'Select Date'}
+              </label>
+              <input 
+                type={pdfPeriod === 'yearly' ? 'number' : pdfPeriod === 'monthly' ? 'month' : 'date'} 
+                value={pdfPeriod === 'yearly' ? pdfSelectedDate.slice(0,4) : pdfPeriod === 'monthly' ? pdfSelectedDate.slice(0,7) : pdfSelectedDate} 
+                onChange={e => {
+                  if (pdfPeriod === 'yearly') setPdfSelectedDate(e.target.value + '-01-01');
+                  else if (pdfPeriod === 'monthly') setPdfSelectedDate(e.target.value + '-01');
+                  else setPdfSelectedDate(e.target.value);
+                }} 
+                style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white', boxSizing: 'border-box' }} 
+              />
+            </div>
+          )}
+
+          <button onClick={() => { downloadPDF(); setPdfModalOpen(false); }} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '14px', borderRadius: '12px', fontWeight: '700', fontSize: '16px', cursor: 'pointer', marginTop: '10px' }}>
+            Download PDF
+          </button>
+        </div>
+      </BottomSheet>
+
       <BottomSheet isOpen={modal === 'income' || modal === 'expense'} onClose={closeModal} title={modal === 'income' ? t.incomeLabel : t.expenseLabel}>
         <form onSubmit={saveTransaction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
