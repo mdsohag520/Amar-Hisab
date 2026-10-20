@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
+import { Download,
   Wallet, TrendingUp, TrendingDown, ArrowLeftRight,
   Plus, Home, ReceiptText, Users, ChartNoAxesCombined,
   Settings, Globe, CalendarDays, Search, Bell, X, Trash2, Pencil,
