@@ -450,6 +450,7 @@ function App() {
     const matchesType = filter === 'all' || item.type === filter
     const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase())
     return matchesType && matchesSearch
+  const [searchQuery, setSearchQuery] = useState('')
   })
 
   // Helper to calculate contact specific stats
