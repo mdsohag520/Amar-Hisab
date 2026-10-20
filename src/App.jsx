@@ -10,6 +10,8 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts'
 import { supabase } from './supabase'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 import './App.css'
 
 // Import components
@@ -447,8 +449,75 @@ function App() {
   const totalPayable = debts.filter(d => d.type === 'payable').reduce((s, d) => s + (Number(d.amount) - Number(d.paid_amount)), 0)
 
   const [searchQuery, setSearchQuery] = useState('')
+  const [pdfModalOpen, setPdfModalOpen] = useState(false)
+  const [pdfPeriod, setPdfPeriod] = useState('allTime')
+  const [pdfSelectedDate, setPdfSelectedDate] = useState(new Date().toISOString().split('T')[0])
 
-  const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
+  
+  const downloadPDF = () => {
+    const doc = new jsPDF();
+    
+    // Filter transactions based on pdfPeriod and pdfSelectedDate
+    const pdfTransactions = transactions.filter(item => {
+      if (pdfPeriod === 'allTime') return true;
+      const itemDate = item.date;
+      const selected = pdfSelectedDate;
+      if (pdfPeriod === 'daily') return itemDate === selected;
+      if (pdfPeriod === 'monthly') return itemDate.slice(0, 7) === selected.slice(0, 7);
+      if (pdfPeriod === 'yearly') return itemDate.slice(0, 4) === selected.slice(0, 4);
+      return true;
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    
+    // Title
+    doc.setFontSize(20);
+    doc.setTextColor(16, 185, 129);
+    doc.text('Amar Hisab - Transaction Report', pageWidth / 2, 20, { align: 'center' });
+    
+    // Subtitle
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    const periodText = `Period: ${pdfPeriod.toUpperCase()} (${pdfSelectedDate}) | Generated: ${new Date().toLocaleDateString()}`;
+    doc.text(periodText, pageWidth / 2, 28, { align: 'center' });
+    
+    // Table Data
+    const tableData = pdfTransactions.map(item => [
+      item.date,
+      item.title,
+      item.category,
+      item.type === 'income' ? 'Income' : 'Expense',
+      (item.type === 'income' ? '+' : '-') + item.amount + ' Tk'
+    ]);
+
+    autoTable(doc, {
+      startY: 35,
+      head: [['Date', 'Description', 'Category', 'Type', 'Amount (Tk)']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [16, 185, 129], textColor: 255 },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      styles: { fontSize: 9, cellPadding: 3 },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        4: { halign: 'right' }
+      }
+    });
+
+    // Summary
+    const totalIncome = pdfTransactions.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+    const totalExpense = pdfTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+    const finalY = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(12);
+    doc.setTextColor(0);
+    doc.text(`Total Income: ${totalIncome} Tk`, 14, finalY);
+    doc.text(`Total Expense: ${totalExpense} Tk`, 14, finalY + 8);
+    doc.text(`Net Savings: ${totalIncome - totalExpense} Tk`, 14, finalY + 16);
+
+    doc.save(`Amar_Hisab_${pdfPeriod}_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
     const matchesType = filter === 'all' || item.type === filter;
     if (!searchQuery) return matchesType;
     const q = searchQuery.toLowerCase();
@@ -872,7 +941,12 @@ function App() {
 
         {activePage === 'transactions' && (
           <div style={{ padding: '16px', paddingBottom: '100px' }}>
-             <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', marginBottom: '16px' }}>{t.transactions}</h2>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+               <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', margin: 0 }}>{t.transactions}</h2>
+               <button onClick={() => setPdfModalOpen(true)} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', boxShadow: '0 4px 10px rgba(16,185,129,0.3)' }}>
+                 <Download size={16} /> PDF
+               </button>
+             </div>
              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px' }}>
                {['all', 'income', 'expense'].map(key => (
                  <button key={key} onClick={() => setFilter(key)} style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.2)', background: filter === key ? 'rgba(255,255,255,0.3)' : 'transparent', color: 'white', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>{t[key]}</button>
@@ -1199,6 +1273,40 @@ function App() {
       </div>
 
       {/* Modals & Sheets */}
+      <BottomSheet isOpen={pdfModalOpen} onClose={() => setPdfModalOpen(false)} title="PDF Export Options">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <label style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>Select Period</label>
+          <select value={pdfPeriod} onChange={e => setPdfPeriod(e.target.value)} style={{ padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white' }}>
+            <option value="allTime" style={{ color: 'black' }}>All Time (সর্বমোট)</option>
+            <option value="daily" style={{ color: 'black' }}>Daily (দৈনিক)</option>
+            <option value="monthly" style={{ color: 'black' }}>Monthly (মাসিক)</option>
+            <option value="yearly" style={{ color: 'black' }}>Yearly (বার্ষিক)</option>
+          </select>
+
+          {pdfPeriod !== 'allTime' && (
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '8px' }}>
+                {pdfPeriod === 'yearly' ? 'Select Year' : pdfPeriod === 'monthly' ? 'Select Month' : 'Select Date'}
+              </label>
+              <input 
+                type={pdfPeriod === 'yearly' ? 'number' : pdfPeriod === 'monthly' ? 'month' : 'date'} 
+                value={pdfPeriod === 'yearly' ? pdfSelectedDate.slice(0,4) : pdfPeriod === 'monthly' ? pdfSelectedDate.slice(0,7) : pdfSelectedDate} 
+                onChange={e => {
+                  if (pdfPeriod === 'yearly') setPdfSelectedDate(e.target.value + '-01-01');
+                  else if (pdfPeriod === 'monthly') setPdfSelectedDate(e.target.value + '-01');
+                  else setPdfSelectedDate(e.target.value);
+                }} 
+                style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white', boxSizing: 'border-box' }} 
+              />
+            </div>
+          )}
+
+          <button onClick={() => { downloadPDF(); setPdfModalOpen(false); }} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '14px', borderRadius: '12px', fontWeight: '700', fontSize: '16px', cursor: 'pointer', marginTop: '10px' }}>
+            Download PDF
+          </button>
+        </div>
+      </BottomSheet>
+
       <BottomSheet isOpen={modal === 'income' || modal === 'expense'} onClose={closeModal} title={modal === 'income' ? t.incomeLabel : t.expenseLabel}>
         <form onSubmit={saveTransaction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
