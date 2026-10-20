@@ -863,48 +863,13 @@ function App() {
         )}
 
         {activePage === 'transactions' && (
-          <div style={{ padding: '16px', paddingBottom: '100px' }}>
-             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-               <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', margin: 0 }}>{t.transactions}</h2>
-               <button onClick={downloadPDF} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', boxShadow: '0 4px 10px rgba(16,185,129,0.3)' }}>
-                 <Download size={16} /> PDF
-               </button>
-             </div>
-             
+          <div style={{ padding: '16px' }}>
+             <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', marginBottom: '16px' }}>{t.transactions}</h2>
              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px' }}>
                {['all', 'income', 'expense'].map(key => (
                  <button key={key} onClick={() => setFilter(key)} style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.2)', background: filter === key ? 'rgba(255,255,255,0.3)' : 'transparent', color: 'white', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>{t[key]}</button>
                ))}
              </div>
-
-             <div style={{ marginBottom: '16px' }}>
-               <input 
-                 type="text" 
-                 placeholder={t.search || "Search transactions..."} 
-                 value={searchQuery} 
-                 onChange={(e) => setSearchQuery(e.target.value)} 
-                 style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} 
-               />
-             </div>
-
-             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-               <select value={pdfFilterType} onChange={e => { setPdfFilterType(e.target.value); setPdfFilterValue(''); }} style={{ padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white' }}>
-                 <option value="all" style={{ color: 'black' }}>All Dates</option>
-                 <option value="date" style={{ color: 'black' }}>Specific Date</option>
-                 <option value="month" style={{ color: 'black' }}>Specific Month</option>
-                 <option value="year" style={{ color: 'black' }}>Specific Year</option>
-               </select>
-               {pdfFilterType !== 'all' && (
-                 <input 
-                   type={pdfFilterType === 'date' ? 'date' : pdfFilterType === 'month' ? 'month' : 'number'} 
-                   value={pdfFilterValue} 
-                   onChange={e => setPdfFilterValue(e.target.value)} 
-                   placeholder={pdfFilterType === 'year' ? 'YYYY' : ''}
-                   style={{ padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white' }} 
-                 />
-               )}
-             </div>
-
              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {finalDisplayTransactions.map(item => (
                 <div key={item.id} style={{ background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -925,7 +890,6 @@ function App() {
              </div>
           </div>
         )}
-
 
         {activePage === 'debts' && (
           <div style={{ padding: '16px' }}>
