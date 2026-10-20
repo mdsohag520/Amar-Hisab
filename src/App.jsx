@@ -939,6 +939,15 @@ function App() {
                {['all', 'income', 'expense'].map(key => (
                  <button key={key} onClick={() => setFilter(key)} style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.2)', background: filter === key ? 'rgba(255,255,255,0.3)' : 'transparent', color: 'white', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>{t[key]}</button>
                ))}
+             <div style={{ marginBottom: "16px" }}>
+               <input 
+                 type="text" 
+                 placeholder={t.search || "Search transactions..."} 
+                 value={searchQuery} 
+                 onChange={(e) => setSearchQuery(e.target.value)} 
+                 style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white", fontSize: "14px", outline: "none", boxSizing: "border-box" }} 
+               />
+             </div>
              </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {Object.entries(
