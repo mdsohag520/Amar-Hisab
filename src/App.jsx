@@ -770,7 +770,7 @@ function App() {
       <main className="main-content">
         <header className="topbar">
           <div className="mobile-brand">
-            <div className="brand-icon"><Wallet size={22} /></div><strong style={{ color: 'var(--text-main)', fontSize: '18px' }}>{t.appName}</strong>
+            <div className="brand-icon"><img src="/pwa-192x192.png" alt="Logo" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }} /></div><strong style={{ color: 'var(--text-main)', fontSize: '18px' }}>{t.appName}</strong>
           </div>
           <div className="top-actions">
             <button className="language-button" onClick={() => setLang(lang === 'BN' ? 'EN' : 'BN')} style={{ background: 'rgba(255,255,255,0.1)', borderColor: 'rgba(255,255,255,0.2)', color: 'white' }}>
