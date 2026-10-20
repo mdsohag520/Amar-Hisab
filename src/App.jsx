@@ -10,8 +10,6 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
 } from 'recharts'
 import { supabase } from './supabase'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
 import './App.css'
 
 // Import components
@@ -448,88 +446,11 @@ function App() {
   const totalReceivable = debts.filter(d => d.type === 'receivable').reduce((s, d) => s + (Number(d.amount) - Number(d.paid_amount)), 0)
   const totalPayable = debts.filter(d => d.type === 'payable').reduce((s, d) => s + (Number(d.amount) - Number(d.paid_amount)), 0)
 
-  const [searchQuery, setSearchQuery] = useState('')
-  const [pdfFilterType, setPdfFilterType] = useState('all')
-  const [pdfFilterValue, setPdfFilterValue] = useState('')
-  const [pdfModalOpen, setPdfModalOpen] = useState(false)
-  const [pdfPeriod, setPdfPeriod] = useState('allTime')
-  const [pdfSelectedDate, setPdfSelectedDate] = useState(new Date().toISOString().split('T')[0])
-
-  
-  const downloadPDF = () => {
-    const doc = new jsPDF();
-    
-    // Filter transactions based on pdfPeriod and pdfSelectedDate
-    const pdfTransactions = transactions.filter(item => {
-      if (pdfPeriod === 'allTime') return true;
-      const itemDate = item.date;
-      const selected = pdfSelectedDate;
-      if (pdfPeriod === 'daily') return itemDate === selected;
-      if (pdfPeriod === 'monthly') return itemDate.slice(0, 7) === selected.slice(0, 7);
-      if (pdfPeriod === 'yearly') return itemDate.slice(0, 4) === selected.slice(0, 4);
-      return true;
-    });
-
-    const pageWidth = doc.internal.pageSize.getWidth();
-    
-    // Title
-    doc.setFontSize(20);
-    doc.setTextColor(16, 185, 129);
-    doc.text('Amar Hisab - Transaction Report', pageWidth / 2, 20, { align: 'center' });
-    
-    // Subtitle
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    const periodText = `Period: ${pdfPeriod.toUpperCase()} (${pdfSelectedDate}) | Generated: ${new Date().toLocaleDateString()}`;
-    doc.text(periodText, pageWidth / 2, 28, { align: 'center' });
-    
-    // Table Data
-    const tableData = pdfTransactions.map(item => [
-      item.date,
-      item.title,
-      item.category,
-      item.type === 'income' ? 'Income' : 'Expense',
-      (item.type === 'income' ? '+' : '-') + item.amount + ' Tk'
-    ]);
-
-    autoTable(doc, {
-      startY: 35,
-      head: [['Date', 'Description', 'Category', 'Type', 'Amount (Tk)']],
-      body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [16, 185, 129], textColor: 255 },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
-      styles: { fontSize: 9, cellPadding: 3 },
-      columnStyles: {
-        0: { cellWidth: 25 },
-        4: { halign: 'right' }
-      }
-    });
-
-    // Summary
-    const totalIncome = pdfTransactions.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-    const totalExpense = pdfTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
-    const finalY = doc.lastAutoTable.finalY + 10;
-    doc.setFontSize(12);
-    doc.setTextColor(0);
-    doc.text(`Total Income: ${totalIncome} Tk`, 14, finalY);
-    doc.text(`Total Expense: ${totalExpense} Tk`, 14, finalY + 8);
-    doc.text(`Net Savings: ${totalIncome - totalExpense} Tk`, 14, finalY + 16);
-
-    doc.save(`Amar_Hisab_${pdfPeriod}_${new Date().toISOString().split('T')[0]}.pdf`);
-  };
-
-const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
-    const matchesType = filter === 'all' || item.type === filter;
-    if (!searchQuery) return matchesType;
-    const q = searchQuery.toLowerCase();
-    const titleMatch = (item.title || '').toLowerCase().includes(q);
-    const catMatch = (getCategoryDisplayName(item.category) || '').toLowerCase().includes(q);
-    const amountMatch = String(item.amount).includes(q);
-    const dateMatch = (item.date || '').includes(q);
-    const noteMatch = (item.note || '').toLowerCase().includes(q);
-    return matchesType && (titleMatch || catMatch || amountMatch || dateMatch || noteMatch);
-  });
+  const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
+    const matchesType = filter === 'all' || item.type === filter
+    const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase())
+    return matchesType && matchesSearch
+  })
 
   // Helper to calculate contact specific stats
   const getContactStats = (contactId) => {
@@ -861,7 +782,7 @@ const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
         </header>
 
         {activePage === 'dashboard' && (
-          <div style={{ padding: '16px', paddingBottom: '100px' }}>
+          <div style={{ padding: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '20px' }}>
               <div>
                 <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', margin: 0 }}>{t.welcome} 👋</h2>
@@ -942,59 +863,27 @@ const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
         )}
 
         {activePage === 'transactions' && (
-          <div style={{ padding: '16px', paddingBottom: '100px' }}>
-             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-               <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', margin: 0 }}>{t.transactions}</h2>
-               <button onClick={() => setPdfModalOpen(true)} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', boxShadow: '0 4px 10px rgba(16,185,129,0.3)' }}>
-                 <Download size={16} /> PDF
-               </button>
-             </div>
+          <div style={{ padding: '16px' }}>
+             <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', marginBottom: '16px' }}>{t.transactions}</h2>
              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px' }}>
                {['all', 'income', 'expense'].map(key => (
                  <button key={key} onClick={() => setFilter(key)} style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.2)', background: filter === key ? 'rgba(255,255,255,0.3)' : 'transparent', color: 'white', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>{t[key]}</button>
                ))}
              </div>
-
-             <div style={{ marginBottom: '16px' }}>
-               <input 
-                 type="text" 
-                 placeholder={t.search || "Search transactions..."} 
-                 value={searchQuery} 
-                 onChange={(e) => setSearchQuery(e.target.value)} 
-                 style={{ width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }} 
-               />
-             </div>
              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {Object.entries(
-                finalDisplayTransactions.reduce((groups, item) => {
-                  const date = item.date;
-                  if (!groups[date]) groups[date] = [];
-                  groups[date].push(item);
-                  return groups;
-                }, {})
-              ).sort((a, b) => new Date(b[0]) - new Date(a[0]))
-              .map(([date, items]) => (
-                <div key={date} style={{ marginBottom: '16px' }}>
-                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#9ca3af', marginBottom: '8px', paddingLeft: '4px' }}>
-                    {date}
+              {finalDisplayTransactions.map(item => (
+                <div key={item.id} style={{ background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: item.type === 'income' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.type === 'income' ? '#10b981' : '#ef4444' }}>
+                    {item.type === 'income' ? <TrendingUp size={20} /> : <ReceiptText size={20} />}
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {items.map(item => (
-                      <div key={item.id} style={{ background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: item.type === 'income' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.type === 'income' ? '#10b981' : '#ef4444' }}>
-                          {item.type === 'income' ? <TrendingUp size={20} /> : <ReceiptText size={20} />}
-                        </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: '600', color: 'white', fontSize: '15px' }}>{item.title}</div>
-                          <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>{getCategoryDisplayName(item.category)} • {item.date}</div>
-                        </div>
-                        <div style={{ fontWeight: '700', color: item.type === 'income' ? '#10b981' : 'white', fontSize: '16px', marginRight: '8px' }}>{item.type === 'income' ? '+' : '−'}{money(item.amount)}</div>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          <button onClick={() => openEditModal(item)} style={{ background: 'none', border: 'none', color: 'var(--primary)' }}><Pencil size={18} /></button>
-                          <button onClick={() => confirmDeleteTransaction(item.id)} style={{ background: 'none', border: 'none', color: '#ef4444' }}><Trash2 size={18} /></button>
-                        </div>
-                      </div>
-                    ))}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '600', color: 'white', fontSize: '15px' }}>{item.title}</div>
+                    <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>{getCategoryDisplayName(item.category)} • {item.date}</div>
+                  </div>
+                  <div style={{ fontWeight: '700', color: item.type === 'income' ? '#10b981' : 'white', fontSize: '16px', marginRight: '8px' }}>{item.type === 'income' ? '+' : '−'}{money(item.amount)}</div>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button onClick={() => openEditModal(item)} style={{ background: 'none', border: 'none', color: 'var(--primary)' }}><Pencil size={18} /></button>
+                    <button onClick={() => confirmDeleteTransaction(item.id)} style={{ background: 'none', border: 'none', color: '#ef4444' }}><Trash2 size={18} /></button>
                   </div>
                 </div>
               ))}
@@ -1003,7 +892,7 @@ const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
         )}
 
         {activePage === 'debts' && (
-          <div style={{ padding: '16px', paddingBottom: '100px' }}>
+          <div style={{ padding: '16px' }}>
              <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
                 <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.1)', padding: '16px', borderRadius: '16px', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
                   <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginBottom: '4px' }}>{t.totalReceivable}</div>
@@ -1049,7 +938,7 @@ const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
         )}
 
         {activePage === 'khata' && (
-          <div style={{ padding: '16px', paddingBottom: '100px' }}>
+          <div style={{ padding: '16px' }}>
             <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
               <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '16px', textAlign: 'center' }}>
                 <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)' }}>{t.totalMarketDue}</div>
@@ -1151,7 +1040,7 @@ const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
         )}
 
         {activePage === 'reports' && (
-          <div style={{ padding: '16px', paddingBottom: '100px' }}>
+          <div style={{ padding: '16px' }}>
             <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', marginBottom: '16px' }}>{t.financialReport}</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
               <div style={{ background: 'rgba(16,185,129,0.1)', padding: '12px', borderRadius: '12px', textAlign: 'center', border: '1px solid rgba(16,185,129,0.3)' }}>
@@ -1205,7 +1094,7 @@ const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
         )}
 
         {activePage === 'settings' && (
-          <div style={{ padding: '16px', paddingBottom: '100px' }}>
+          <div style={{ padding: '16px' }}>
              <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '16px', padding: '20px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #06b6d4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <User size={24} color="white" />
@@ -1275,40 +1164,6 @@ const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
       </div>
 
       {/* Modals & Sheets */}
-      <BottomSheet isOpen={pdfModalOpen} onClose={() => setPdfModalOpen(false)} title="PDF Export Options">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <label style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>Select Period</label>
-          <select value={pdfPeriod} onChange={e => setPdfPeriod(e.target.value)} style={{ padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white' }}>
-            <option value="allTime" style={{ color: 'black' }}>All Time (সর্বমোট)</option>
-            <option value="daily" style={{ color: 'black' }}>Daily (দৈনিক)</option>
-            <option value="monthly" style={{ color: 'black' }}>Monthly (মাসিক)</option>
-            <option value="yearly" style={{ color: 'black' }}>Yearly (বার্ষিক)</option>
-          </select>
-
-          {pdfPeriod !== 'allTime' && (
-            <div>
-              <label style={{ fontSize: '14px', fontWeight: '600', color: 'rgba(255,255,255,0.9)', display: 'block', marginBottom: '8px' }}>
-                {pdfPeriod === 'yearly' ? 'Select Year' : pdfPeriod === 'monthly' ? 'Select Month' : 'Select Date'}
-              </label>
-              <input 
-                type={pdfPeriod === 'yearly' ? 'number' : pdfPeriod === 'monthly' ? 'month' : 'date'} 
-                value={pdfPeriod === 'yearly' ? pdfSelectedDate.slice(0,4) : pdfPeriod === 'monthly' ? pdfSelectedDate.slice(0,7) : pdfSelectedDate} 
-                onChange={e => {
-                  if (pdfPeriod === 'yearly') setPdfSelectedDate(e.target.value + '-01-01');
-                  else if (pdfPeriod === 'monthly') setPdfSelectedDate(e.target.value + '-01');
-                  else setPdfSelectedDate(e.target.value);
-                }} 
-                style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white', boxSizing: 'border-box' }} 
-              />
-            </div>
-          )}
-
-          <button onClick={() => { downloadPDF(); setPdfModalOpen(false); }} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '14px', borderRadius: '12px', fontWeight: '700', fontSize: '16px', cursor: 'pointer', marginTop: '10px' }}>
-            Download PDF
-          </button>
-        </div>
-      </BottomSheet>
-
       <BottomSheet isOpen={modal === 'income' || modal === 'expense'} onClose={closeModal} title={modal === 'income' ? t.incomeLabel : t.expenseLabel}>
         <form onSubmit={saveTransaction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: '16px', padding: '16px', textAlign: 'center' }}>
