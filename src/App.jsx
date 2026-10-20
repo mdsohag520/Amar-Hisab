@@ -1,4 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
+import { jsPDF } from 'jspdf'
+import html2canvas from 'html2canvas'
+import autoTable from 'jspdf-autotable'
+import bengaliFontUrl from './assets/NotoSansBengali-Regular.ttf?url'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Wallet, TrendingUp, TrendingDown, ArrowLeftRight,
@@ -148,6 +152,7 @@ function App() {
   
   const [filter, setFilter] = useState(localStorage.getItem('amar_filter') || 'all')
   const [search, setSearch] = useState('')
+  const [pdfLoading, setPdfLoading] = useState(false)
   
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('other')
@@ -448,9 +453,177 @@ function App() {
 
   const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
     const matchesType = filter === 'all' || item.type === filter
-    const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase())
-    return matchesType && matchesSearch
+    const term = String(search || '').trim().toLowerCase()
+    const searchable = [
+      item.title, item.category, item.amount, item.date, item.note,
+      getCategoryDisplayName(item.category)
+    ].map(value => String(value ?? '').toLowerCase()).join(' ')
+    return matchesType && (!term || searchable.includes(term))
   })
+
+  const historyYear = (selectedDate || new Date().toISOString().slice(0, 10)).slice(0, 4)
+  const historyMonth = (selectedDate || new Date().toISOString().slice(0, 10)).slice(0, 7)
+  const historyTransactions = [...finalDisplayTransactions].sort(
+    (a, b) => String(b.date || '').localeCompare(String(a.date || ''))
+  )
+
+  
+  async function downloadTransactionsPDF() {
+    if (pdfLoading) return
+
+    setPdfLoading(true)
+    showToast(
+      lang === 'BN' ? 'Amar Hisab PDF তৈরি হচ্ছে...' : 'Generating Amar Hisab PDF...',
+      'info'
+    )
+
+    let report = null
+
+    try {
+      await document.fonts.ready
+
+      const sourceList = document.getElementById('transactions-pdf-list')
+      if (!sourceList) throw new Error('Visible transaction list not found')
+
+      // Clone the exact list currently displayed by the app.
+      const clonedList = sourceList.cloneNode(true)
+
+      // Remove Edit/Delete controls from the PDF.
+      clonedList.querySelectorAll('button').forEach(button => button.remove())
+      clonedList.querySelectorAll('[style]').forEach(element => {
+        element.style.backdropFilter = 'none'
+      })
+
+      report = document.createElement('div')
+      report.style.cssText = [
+        'position:fixed',
+        'left:0',
+        'top:0',
+        'width:794px',
+        'padding:24px',
+        'box-sizing:border-box',
+        'background:#0f172a',
+        'color:white',
+        'z-index:-1',
+        'font-family:inherit'
+      ].join(';')
+
+      const heading = document.createElement('h1')
+      heading.textContent = 'Amar Hisab — ' +
+        (lang === 'BN' ? 'লেনদেন' : 'Transactions')
+      heading.style.cssText =
+        'color:#34d399;font-size:25px;font-weight:800;margin:0 0 18px'
+
+      report.appendChild(heading)
+      report.appendChild(clonedList)
+
+      if (historyTransactions.length === 0) {
+        const empty = document.createElement('div')
+        empty.textContent = lang === 'BN'
+          ? 'কোনো লেনদেন পাওয়া যায়নি।'
+          : 'No transactions found.'
+        empty.style.cssText = 'padding:24px 8px;color:white;text-align:center'
+        report.appendChild(empty)
+      }
+
+      document.body.appendChild(report)
+      await new Promise(resolve => requestAnimationFrame(
+        () => requestAnimationFrame(resolve)
+      ))
+
+      const canvas = await html2canvas(report, {
+        scale: 2,
+        backgroundColor: '#0f172a',
+        logging: false,
+        useCORS: true
+      })
+
+      if (!canvas.width || !canvas.height) {
+        throw new Error('Could not render transaction list')
+      }
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      })
+
+      pdf.setProperties({
+        title: 'Amar Hisab - Transactions',
+        subject: 'Visible filtered transaction list',
+        creator: 'Amar Hisab'
+      })
+
+      const margin = 8
+      const pageWidth = 210 - margin * 2
+      const pageHeight = 297 - margin * 2
+      const sliceHeight = Math.floor(canvas.width * pageHeight / pageWidth)
+
+      let page = 0
+
+      for (let y = 0; y < canvas.height; y += sliceHeight) {
+        if (page > 0) pdf.addPage()
+
+        const height = Math.min(sliceHeight, canvas.height - y)
+        const pageCanvas = document.createElement('canvas')
+        pageCanvas.width = canvas.width
+        pageCanvas.height = height
+
+        const ctx = pageCanvas.getContext('2d')
+        if (!ctx) throw new Error('Could not prepare PDF page')
+
+        ctx.fillStyle = '#0f172a'
+        ctx.fillRect(0, 0, canvas.width, height)
+        ctx.drawImage(
+          canvas, 0, y, canvas.width, height,
+          0, 0, canvas.width, height
+        )
+
+        pdf.addImage(
+          pageCanvas.toDataURL('image/jpeg', 0.95),
+          'JPEG',
+          margin,
+          margin,
+          pageWidth,
+          height * pageWidth / canvas.width,
+          undefined,
+          'FAST'
+        )
+
+        page++
+        pdf.setFont('helvetica', 'normal')
+        pdf.setFontSize(8)
+        pdf.setTextColor(180, 190, 200)
+        pdf.text(
+          'Amar Hisab | Page ' + page,
+          105,
+          293,
+          { align: 'center' }
+        )
+      }
+
+      const dateTag = new Date().toISOString().slice(0, 10)
+      const periodTag = String(reportPeriod).replace(/[^a-zA-Z0-9_-]/g, '')
+      pdf.save('Amar_Hisab_Transactions_' + periodTag + '_' + dateTag + '.pdf')
+
+      showToast(
+        lang === 'BN' ? 'Amar Hisab PDF ডাউনলোড শুরু হয়েছে' : 'Amar Hisab PDF download started',
+        'success'
+      )
+    } catch (error) {
+      console.error('Amar Hisab PDF error:', error)
+      showToast(
+        lang === 'BN' ? 'PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।' : 'Could not generate PDF. Please try again.',
+        'error'
+      )
+    } finally {
+      if (report && report.parentNode) report.parentNode.removeChild(report)
+      setPdfLoading(false)
+    }
+  }
+
+
 
   // Helper to calculate contact specific stats
   const getContactStats = (contactId) => {
@@ -864,14 +1037,74 @@ function App() {
 
         {activePage === 'transactions' && (
           <div style={{ padding: '16px' }}>
-             <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', marginBottom: '16px' }}>{t.transactions}</h2>
+             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', margin: 0 }}>{t.transactions}</h2>
+              <button type="button" onClick={downloadTransactionsPDF} disabled={pdfLoading} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '7px', padding: '10px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', background: pdfLoading ? '#475569' : '#059669', color: 'white', fontSize: '13px', fontWeight: '700', cursor: pdfLoading ? 'wait' : 'pointer', opacity: pdfLoading ? 0.75 : 1 }}>
+                {pdfLoading ? '⏳ Generating PDF...' : '↓ Download PDF'}
+              </button>
+            </div>
+             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+               {[
+                 ['allTime', lang === 'BN' ? 'সব হিসাব' : 'All time'],
+                 ['yearly', lang === 'BN' ? 'বছর' : 'Year'],
+                 ['monthly', lang === 'BN' ? 'মাস' : 'Month'],
+                 ['daily', lang === 'BN' ? 'তারিখ' : 'Date']
+               ].map(([key, label]) => (
+                 <button key={key} onClick={() => setReportPeriod(key)} style={{
+                   padding: '9px 13px', borderRadius: '20px',
+                   border: '1px solid rgba(255,255,255,0.2)',
+                   background: reportPeriod === key ? 'rgba(16,185,129,0.28)' : 'transparent',
+                   color: 'white', fontSize: '13px', fontWeight: '600'
+                 }}>{label}</button>
+               ))}
+             </div>
+
+             {reportPeriod === 'yearly' && (
+               <select aria-label="Select year" value={historyYear}
+                 onChange={e => setSelectedDate(`${e.target.value}-01-01`)}
+                 style={{ width: '100%', padding: '12px', marginBottom: '14px', borderRadius: '10px', background: '#172033', color: 'white' }}>
+                 {[...new Set([
+                   new Date().getFullYear().toString(),
+                   ...transactions.map(item => String(item.date || '').slice(0, 4)).filter(Boolean)
+                 ])].sort().reverse().map(year => <option key={year} value={year}>{year}</option>)}
+               </select>
+             )}
+
+             {reportPeriod === 'monthly' && (
+               <input aria-label="Select month" type="month" value={historyMonth}
+                 onChange={e => e.target.value && setSelectedDate(`${e.target.value}-01`)}
+                 style={{ width: '100%', boxSizing: 'border-box', padding: '12px', marginBottom: '14px', borderRadius: '10px', background: '#172033', color: 'white' }} />
+             )}
+
+             {reportPeriod === 'daily' && (
+               <input aria-label="Select date" type="date" value={selectedDate}
+                 onChange={e => e.target.value && setSelectedDate(e.target.value)}
+                 style={{ width: '100%', boxSizing: 'border-box', padding: '12px', marginBottom: '14px', borderRadius: '10px', background: '#172033', color: 'white' }} />
+             )}
+
+             <input type="search" value={search}
+               onChange={e => setSearch(e.target.value)}
+               placeholder={lang === 'BN' ? 'নাম, ক্যাটাগরি, টাকা, তারিখ বা নোট খুঁজুন...' : 'Search title, category, amount, date or note...'}
+               aria-label="Search transactions"
+               style={{ width: '100%', boxSizing: 'border-box', padding: '13px', marginBottom: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: 'white', fontSize: '14px' }} />
              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px' }}>
                {['all', 'income', 'expense'].map(key => (
                  <button key={key} onClick={() => setFilter(key)} style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.2)', background: filter === key ? 'rgba(255,255,255,0.3)' : 'transparent', color: 'white', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>{t[key]}</button>
                ))}
              </div>
-             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {finalDisplayTransactions.map(item => (
+             <div id="transactions-pdf-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {historyTransactions.map((item, index) => (
+                <div key={item.id}>
+                  {(index === 0 || String(historyTransactions[index - 1].date || '').slice(0, 7) !== String(item.date || '').slice(0, 7)) && (
+                    <h3 style={{ color: '#a7f3d0', fontSize: '17px', margin: '16px 0 10px' }}>
+                      {item.date ? new Date(`${String(item.date).slice(0, 7)}-01T12:00:00`).toLocaleDateString(lang === 'BN' ? 'bn-BD' : 'en-US', { month: 'long', year: 'numeric' }) : ''}
+                    </h3>
+                  )}
+                  {(index === 0 || historyTransactions[index - 1].date !== item.date) && (
+                    <div style={{ padding: '9px 12px', marginBottom: '8px', borderRadius: '10px', background: 'rgba(255,255,255,0.08)', color: 'white', fontWeight: '700' }}>
+                      {item.date}
+                    </div>
+                  )}
                 <div key={item.id} style={{ background: 'rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: item.type === 'income' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: item.type === 'income' ? '#10b981' : '#ef4444' }}>
                     {item.type === 'income' ? <TrendingUp size={20} /> : <ReceiptText size={20} />}
@@ -886,8 +1119,14 @@ function App() {
                     <button onClick={() => confirmDeleteTransaction(item.id)} style={{ background: 'none', border: 'none', color: '#ef4444' }}><Trash2 size={18} /></button>
                   </div>
                 </div>
+                </div>
               ))}
              </div>
+             {historyTransactions.length === 0 && (
+               <div style={{ color: 'rgba(255,255,255,0.6)', textAlign: 'center', padding: '24px 8px' }}>
+                 {lang === 'BN' ? 'কোনো লেনদেন পাওয়া যায়নি।' : 'No transactions found.'}
+               </div>
+             )}
           </div>
         )}
 
