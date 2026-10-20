@@ -865,6 +865,24 @@ function App() {
         {activePage === 'transactions' && (
           <div style={{ padding: '16px' }}>
              <h2 style={{ fontSize: '24px', fontWeight: '800', color: 'white', marginBottom: '16px' }}>{t.transactions}</h2>
+
+             <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+               <select value={pdfFilterType} onChange={e => { setPdfFilterType(e.target.value); setPdfFilterValue(''); }} style={{ padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white' }}>
+                 <option value="all" style={{ color: 'black' }}>All Dates</option>
+                 <option value="date" style={{ color: 'black' }}>Specific Date</option>
+                 <option value="month" style={{ color: 'black' }}>Specific Month</option>
+                 <option value="year" style={{ color: 'black' }}>Specific Year</option>
+               </select>
+               {pdfFilterType !== 'all' && (
+                 <input 
+                   type={pdfFilterType === 'date' ? 'date' : pdfFilterType === 'month' ? 'month' : 'number'} 
+                   value={pdfFilterValue} 
+                   onChange={e => setPdfFilterValue(e.target.value)} 
+                   placeholder={pdfFilterType === 'year' ? 'YYYY' : ''}
+                   style={{ padding: '8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.05)', color: 'white' }} 
+                 />
+               )}
+             </div>
              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginBottom: '16px' }}>
                {['all', 'income', 'expense'].map(key => (
                  <button key={key} onClick={() => setFilter(key)} style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.2)', background: filter === key ? 'rgba(255,255,255,0.3)' : 'transparent', color: 'white', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>{t[key]}</button>
