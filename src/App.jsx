@@ -146,6 +146,7 @@ function App() {
   const [editingContactId, setEditingContactId] = useState(null)
   const [editingKhataEntryId, setEditingKhataEntryId] = useState(null)
   
+  const [searchQuery, setSearchQuery] = useState('')
   const [filter, setFilter] = useState(localStorage.getItem('amar_filter') || 'all')
   const [search, setSearch] = useState('')
   
@@ -447,10 +448,18 @@ function App() {
   const totalPayable = debts.filter(d => d.type === 'payable').reduce((s, d) => s + (Number(d.amount) - Number(d.paid_amount)), 0)
 
   const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
-    const matchesType = filter === 'all' || item.type === filter
-    const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase())
-    return matchesType && matchesSearch
-  })
+    const matchesType = filter === 'all' || item.type === filter;
+    if (!searchQuery) {
+      return matchesType;
+    }
+    const q = searchQuery.toLowerCase();
+    const titleMatch = (item.title || '').toLowerCase().includes(q);
+    const catMatch = (getCategoryDisplayName(item.category) || '').toLowerCase().includes(q);
+    const amountMatch = String(item.amount).includes(q);
+    const dateMatch = (item.date || '').includes(q);
+    const noteMatch = (item.note || '').toLowerCase().includes(q);
+    return matchesType && (titleMatch || catMatch || amountMatch || dateMatch || noteMatch);
+  });
 
   // Helper to calculate contact specific stats
   const getContactStats = (contactId) => {
@@ -877,6 +886,15 @@ function App() {
                {['all', 'income', 'expense'].map(key => (
                  <button key={key} onClick={() => setFilter(key)} style={{ padding: '8px 16px', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.2)', background: filter === key ? 'rgba(255,255,255,0.3)' : 'transparent', color: 'white', fontSize: '13px', cursor: 'pointer', fontWeight: '600' }}>{t[key]}</button>
                ))}
+             <div style={{ marginBottom: "16px" }}>
+               <input 
+                 type="text" 
+                 placeholder={t.search || "Search transactions..."} 
+                 value={searchQuery} 
+                 onChange={(e) => setSearchQuery(e.target.value)} 
+                 style={{ width: "100%", padding: "12px 16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", color: "white", fontSize: "14px", outline: "none", boxSizing: "border-box" }} 
+               />
+             </div>
              </div>
              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {finalDisplayTransactions.map(item => (
