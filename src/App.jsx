@@ -453,10 +453,16 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('')
 
   const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
-    const matchesType = filter === 'all' || item.type === filter
-    const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase())
-    return matchesType && matchesSearch
-  })
+    const matchesType = filter === 'all' || item.type === filter;
+    if (!searchQuery) return matchesType;
+    const q = searchQuery.toLowerCase();
+    const titleMatch = (item.title || '').toLowerCase().includes(q);
+    const catMatch = (getCategoryDisplayName(item.category) || '').toLowerCase().includes(q);
+    const amountMatch = String(item.amount).includes(q);
+    const dateMatch = (item.date || '').includes(q);
+    const noteMatch = (item.note || '').toLowerCase().includes(q);
+    return matchesType && (titleMatch || catMatch || amountMatch || dateMatch || noteMatch);
+  });
 
   // Helper to calculate contact specific stats
   const getContactStats = (contactId) => {
@@ -1423,4 +1429,15 @@ function App() {
   )
 }
 
+  const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
+    const matchesType = filter === 'all' || item.type === filter;
+    if (!searchQuery) return matchesType;
+    const q = searchQuery.toLowerCase();
+    const titleMatch = (item.title || '').toLowerCase().includes(q);
+    const catMatch = (getCategoryDisplayName(item.category) || '').toLowerCase().includes(q);
+    const amountMatch = String(item.amount).includes(q);
+    const dateMatch = (item.date || '').includes(q);
+    const noteMatch = (item.note || '').toLowerCase().includes(q);
+    return matchesType && (titleMatch || catMatch || amountMatch || dateMatch || noteMatch);
+  });
 export default App
