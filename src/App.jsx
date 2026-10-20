@@ -450,6 +450,7 @@ function App() {
 
   const totalReceivable = debts.filter(d => d.type === 'receivable').reduce((s, d) => s + (Number(d.amount) - Number(d.paid_amount)), 0)
   const totalPayable = debts.filter(d => d.type === 'payable').reduce((s, d) => s + (Number(d.amount) - Number(d.paid_amount)), 0)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const finalDisplayTransactions = filteredByPeriodTransactions.filter(item => {
     const matchesType = filter === 'all' || item.type === filter
