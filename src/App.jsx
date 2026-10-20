@@ -449,6 +449,8 @@ function App() {
   const totalPayable = debts.filter(d => d.type === 'payable').reduce((s, d) => s + (Number(d.amount) - Number(d.paid_amount)), 0)
 
   const [searchQuery, setSearchQuery] = useState('')
+  const [pdfFilterType, setPdfFilterType] = useState('all')
+  const [pdfFilterValue, setPdfFilterValue] = useState('')
   const [pdfModalOpen, setPdfModalOpen] = useState(false)
   const [pdfPeriod, setPdfPeriod] = useState('allTime')
   const [pdfSelectedDate, setPdfSelectedDate] = useState(new Date().toISOString().split('T')[0])
