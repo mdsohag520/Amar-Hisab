@@ -153,6 +153,13 @@ function App() {
   const [filter, setFilter] = useState(localStorage.getItem('amar_filter') || 'all')
   const [search, setSearch] = useState('')
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [debtSearchQuery, setDebtSearchQuery] = useState('')
+  const [debtFilterType, setDebtFilterType] = useState('all')
+  const [khataContactSearch, setKhataContactSearch] = useState('')
+  const [khataEntrySearch, setKhataEntrySearch] = useState('')
+  const [khataFilterType, setKhataFilterType] = useState('all')
+  const [debtPdfLoading, setDebtPdfLoading] = useState(false)
+  const [khataPdfLoading, setKhataPdfLoading] = useState(false)
   
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState('other')
@@ -624,6 +631,258 @@ function App() {
   }
 
 
+
+
+  // Separate PDF exports for Debts and Contact Khata.
+  async function exportRecordsPDF(title, headers, rows, fileTag, loading, setLoading) {
+    if (loading) return
+
+    setLoading(true)
+    showToast(
+      lang === 'BN' ? 'Amar Hisab PDF তৈরি হচ্ছে...' : 'Generating Amar Hisab PDF...',
+      'info'
+    )
+
+    let report = null
+
+    try {
+      await document.fonts.ready
+
+      report = document.createElement('div')
+      report.style.cssText = [
+        'position:fixed',
+        'left:0',
+        'top:0',
+        'width:794px',
+        'padding:24px',
+        'box-sizing:border-box',
+        'background:#0f172a',
+        'color:white',
+        'z-index:-1',
+        'font-family:inherit'
+      ].join(';')
+
+      const heading = document.createElement('h1')
+      heading.textContent = 'Amar Hisab — ' + title
+      heading.style.cssText =
+        'color:#34d399;font-size:25px;font-weight:800;margin:0 0 8px'
+      report.appendChild(heading)
+
+      const generated = document.createElement('div')
+      generated.textContent =
+        (lang === 'BN' ? 'তৈরির তারিখ: ' : 'Generated: ') +
+        new Date().toLocaleDateString()
+      generated.style.cssText =
+        'color:#cbd5e1;font-size:12px;margin-bottom:18px'
+      report.appendChild(generated)
+
+      const table = document.createElement('table')
+      table.style.cssText =
+        'width:100%;border-collapse:collapse;font-size:12px;table-layout:auto'
+
+      const thead = document.createElement('thead')
+      const headerRow = document.createElement('tr')
+
+      headers.forEach(label => {
+        const th = document.createElement('th')
+        th.textContent = String(label ?? '')
+        th.style.cssText =
+          'background:#065f46;color:white;padding:9px;border:1px solid #475569;text-align:left'
+        headerRow.appendChild(th)
+      })
+
+      thead.appendChild(headerRow)
+      table.appendChild(thead)
+
+      const tbody = document.createElement('tbody')
+
+      if (!rows.length) {
+        const tr = document.createElement('tr')
+        const td = document.createElement('td')
+        td.colSpan = Math.max(headers.length, 1)
+        td.textContent =
+          lang === 'BN' ? 'কোনো তথ্য পাওয়া যায়নি।' : 'No records found.'
+        td.style.cssText =
+          'padding:16px;border:1px solid #475569;color:#cbd5e1;text-align:center'
+        tr.appendChild(td)
+        tbody.appendChild(tr)
+      } else {
+        rows.forEach((values, index) => {
+          const tr = document.createElement('tr')
+          tr.style.background = index % 2 ? '#1e293b' : '#0f172a'
+
+          values.forEach(value => {
+            const td = document.createElement('td')
+            td.textContent = String(value ?? '-')
+            td.style.cssText =
+              'padding:8px;border:1px solid #475569;color:white;overflow-wrap:anywhere'
+            tr.appendChild(td)
+          })
+
+          tbody.appendChild(tr)
+        })
+      }
+
+      table.appendChild(tbody)
+      report.appendChild(table)
+      document.body.appendChild(report)
+
+      await new Promise(resolve => requestAnimationFrame(
+        () => requestAnimationFrame(resolve)
+      ))
+
+      const canvas = await html2canvas(report, {
+        scale: 2,
+        backgroundColor: '#0f172a',
+        logging: false,
+        useCORS: true
+      })
+
+      if (!canvas.width || !canvas.height) {
+        throw new Error('Could not render PDF report')
+      }
+
+      const pdf = new jsPDF({
+        orientation: 'landscape',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      })
+
+      pdf.setProperties({
+        title: 'Amar Hisab - ' + title,
+        subject: title + ' report',
+        creator: 'Amar Hisab'
+      })
+
+      const margin = 7
+      const pageWidth = 297 - margin * 2
+      const pageHeight = 210 - margin * 2
+      const sliceHeight = Math.floor(canvas.width * pageHeight / pageWidth)
+      let page = 0
+
+      for (let y = 0; y < canvas.height; y += sliceHeight) {
+        if (page > 0) pdf.addPage()
+
+        const height = Math.min(sliceHeight, canvas.height - y)
+        const pageCanvas = document.createElement('canvas')
+        pageCanvas.width = canvas.width
+        pageCanvas.height = height
+
+        const ctx = pageCanvas.getContext('2d')
+        if (!ctx) throw new Error('Could not prepare PDF page')
+
+        ctx.fillStyle = '#0f172a'
+        ctx.fillRect(0, 0, canvas.width, height)
+        ctx.drawImage(canvas, 0, y, canvas.width, height, 0, 0, canvas.width, height)
+
+        pdf.addImage(
+          pageCanvas.toDataURL('image/jpeg', 0.92),
+          'JPEG',
+          margin,
+          margin,
+          pageWidth,
+          height * pageWidth / canvas.width,
+          undefined,
+          'FAST'
+        )
+
+        page++
+        pdf.setFontSize(8)
+        pdf.setTextColor(180, 190, 200)
+        pdf.text('Amar Hisab | Page ' + page, 148.5, 207, { align: 'center' })
+      }
+
+      const dateTag = new Date().toISOString().slice(0, 10)
+      pdf.save('Amar_Hisab_' + fileTag + '_' + dateTag + '.pdf')
+
+      showToast(
+        lang === 'BN' ? 'Amar Hisab PDF ডাউনলোড শুরু হয়েছে' : 'Amar Hisab PDF download started',
+        'success'
+      )
+    } catch (error) {
+      console.error('Amar Hisab report PDF error:', error)
+      showToast(
+        lang === 'BN' ? 'PDF তৈরি করা যায়নি। আবার চেষ্টা করুন।' : 'Could not generate PDF. Please try again.',
+        'error'
+      )
+    } finally {
+      if (report && report.parentNode) report.parentNode.removeChild(report)
+      setLoading(false)
+    }
+  }
+
+  async function downloadDebtsPDF() {
+    const query = debtSearchQuery.trim().toLowerCase()
+    const filtered = debts.filter(d => {
+      const matchesSearch = !query ||
+        [d.person_name, d.note, d.date, d.amount].some(
+          value => String(value ?? '').toLowerCase().includes(query)
+        )
+      const matchesType = debtFilterType === 'all' || d.type === debtFilterType
+      return matchesSearch && matchesType
+    })
+
+    const rows = filtered.map(d => [
+      d.date,
+      d.person_name,
+      d.type === 'receivable' ? t.receivableType : t.payableType,
+      money(d.amount),
+      money(d.paid_amount),
+      money(Number(d.amount) - Number(d.paid_amount)),
+      d.note || '-'
+    ])
+
+    return exportRecordsPDF(
+      lang === 'BN' ? 'ঋণের হিসাব' : 'Debt Records',
+      lang === 'BN'
+        ? ['তারিখ', 'নাম', 'ধরন', 'মূল টাকা', 'পরিশোধ', 'বাকি', 'নোট']
+        : ['Date', 'Name', 'Type', 'Amount', 'Paid', 'Remaining', 'Note'],
+      rows,
+      'Debts',
+      debtPdfLoading,
+      setDebtPdfLoading
+    )
+  }
+
+  async function downloadKhataPDF() {
+    if (!selectedContact) {
+      showToast(
+        lang === 'BN' ? 'আগে একটি কন্টাক্ট নির্বাচন করুন।' : 'Please select a contact first.',
+        'error'
+      )
+      return
+    }
+
+    const query = khataEntrySearch.trim().toLowerCase()
+    const filtered = khataEntries.filter(e => {
+      if (e.contact_id !== selectedContact.id) return false
+      const matchesSearch = !query ||
+        [e.note, e.date, e.amount, e.type].some(
+          value => String(value ?? '').toLowerCase().includes(query)
+        )
+      const matchesType = khataFilterType === 'all' || e.type === khataFilterType
+      return matchesSearch && matchesType
+    })
+
+    const rows = filtered.map(e => [
+      e.date,
+      e.type === 'give' ? t.give : t.take,
+      money(e.amount),
+      e.note || '-'
+    ])
+
+    return exportRecordsPDF(
+      (lang === 'BN' ? 'খাতা - ' : 'Khata - ') + selectedContact.name,
+      lang === 'BN'
+        ? ['তারিখ', 'ধরন', 'টাকার পরিমাণ', 'নোট']
+        : ['Date', 'Type', 'Amount', 'Note'],
+      rows,
+      'Khata',
+      khataPdfLoading,
+      setKhataPdfLoading
+    )
+  }
 
   // Helper to calculate contact specific stats
   const getContactStats = (contactId) => {
@@ -1142,11 +1401,41 @@ function App() {
                   <div style={{ fontSize: '20px', fontWeight: '800', color: '#ef4444' }}>{money(totalPayable)}</div>
                 </div>
              </div>
-             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
                 <h2 style={{ fontSize: '20px', fontWeight: '800', color: 'white', margin: 0 }}>{t.debtDetails}</h2>
-                <button onClick={() => setModal('debt')} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}><Plus size={16} /> {t.addDebt}</button>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  <button onClick={downloadDebtsPDF} disabled={debtPdfLoading} style={{ background: 'rgba(16,185,129,0.16)', color: '#34d399', border: '1px solid rgba(52,211,153,0.45)', padding: '8px 12px', borderRadius: '10px', fontWeight: '600', opacity: debtPdfLoading ? 0.6 : 1 }}>
+                    {debtPdfLoading ? (lang === 'BN' ? 'তৈরি হচ্ছে...' : 'Generating...') : (lang === 'BN' ? 'PDF ডাউনলোড' : 'Download PDF')}
+                  </button>
+                  <button onClick={() => setModal('debt')} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '10px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}><Plus size={16} /> {t.addDebt}</button>
+                </div>
              </div>
-             {debts.map(d => {
+             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+               <input
+                 type="search"
+                 value={debtSearchQuery}
+                 onChange={e => setDebtSearchQuery(e.target.value)}
+                 placeholder={lang === 'BN' ? 'নাম বা নোট দিয়ে খুঁজুন...' : 'Search name or note...'}
+                 aria-label={lang === 'BN' ? 'ঋণ খুঁজুন' : 'Search debts'}
+                 style={{ flex: '1 1 180px', minWidth: 0, padding: '11px 12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: 'white', outline: 'none' }}
+               />
+               <select
+                 value={debtFilterType}
+                 onChange={e => setDebtFilterType(e.target.value)}
+                 aria-label={lang === 'BN' ? 'ঋণের ধরন বাছুন' : 'Filter debt type'}
+                 style={{ flex: '0 1 145px', padding: '11px 12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.2)', background: '#1e293b', color: 'white' }}
+               >
+                 <option value="all">{lang === 'BN' ? 'সব ধরনের ঋণ' : 'All debts'}</option>
+                 <option value="receivable">{t.receivableType}</option>
+                 <option value="payable">{t.payableType}</option>
+               </select>
+             </div>
+             {debts.filter(d => {
+                const query = debtSearchQuery.trim().toLowerCase()
+                const matchesSearch = !query || [d.person_name, d.note, d.date, d.amount].some(value => String(value ?? '').toLowerCase().includes(query))
+                const matchesType = debtFilterType === 'all' || d.type === debtFilterType
+                return matchesSearch && matchesType
+             }).map(d => {
                 const remaining = Number(d.amount) - Number(d.paid_amount)
                 const isPaid = remaining <= 0
                 const debtPayments = payments.filter(p => p.debt_id === d.id)
@@ -1233,11 +1522,42 @@ function App() {
                     )
                   })()}
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
                   <h4 style={{ fontSize: '16px', color: 'white', margin: 0 }}>{t.entryHistory}</h4>
-                  <button onClick={() => setModal('khataEntry')} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}><Plus size={14} /> {t.addEntry}</button>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    <button onClick={downloadKhataPDF} disabled={khataPdfLoading} style={{ background: 'rgba(16,185,129,0.16)', color: '#34d399', border: '1px solid rgba(52,211,153,0.45)', padding: '6px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', opacity: khataPdfLoading ? 0.6 : 1 }}>
+                      {khataPdfLoading ? (lang === 'BN' ? 'তৈরি হচ্ছে...' : 'Generating...') : (lang === 'BN' ? 'PDF ডাউনলোড' : 'Download PDF')}
+                    </button>
+                    <button onClick={() => setModal('khataEntry')} style={{ background: 'linear-gradient(135deg, #10b981, #06b6d4)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '4px' }}><Plus size={14} /> {t.addEntry}</button>
+                  </div>
                 </div>
-                {khataEntries.filter(e => e.contact_id === selectedContact.id).map(entry => (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
+                  <input
+                    type="search"
+                    value={khataEntrySearch}
+                    onChange={e => setKhataEntrySearch(e.target.value)}
+                    placeholder={lang === 'BN' ? 'নোট বা তারিখ দিয়ে খুঁজুন...' : 'Search note or date...'}
+                    aria-label={lang === 'BN' ? 'খাতার এন্ট্রি খুঁজুন' : 'Search khata entries'}
+                    style={{ flex: '1 1 180px', minWidth: 0, padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: 'white' }}
+                  />
+                  <select
+                    value={khataFilterType}
+                    onChange={e => setKhataFilterType(e.target.value)}
+                    aria-label={lang === 'BN' ? 'এন্ট্রির ধরন বাছুন' : 'Filter entry type'}
+                    style={{ flex: '0 1 130px', padding: '10px 12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.2)', background: '#1e293b', color: 'white' }}
+                  >
+                    <option value="all">{lang === 'BN' ? 'সব এন্ট্রি' : 'All entries'}</option>
+                    <option value="give">{t.give}</option>
+                    <option value="take">{t.take}</option>
+                  </select>
+                </div>
+                {khataEntries.filter(e => {
+                  if (e.contact_id !== selectedContact.id) return false
+                  const query = khataEntrySearch.trim().toLowerCase()
+                  const matchesSearch = !query || [e.note, e.date, e.amount, e.type].some(value => String(value ?? '').toLowerCase().includes(query))
+                  const matchesType = khataFilterType === 'all' || e.type === khataFilterType
+                  return matchesSearch && matchesType
+                }).map(entry => (
                   <div key={entry.id} style={{ background: 'rgba(255,255,255,0.05)', padding: '14px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
                     <div>
                       <div style={{ fontWeight: '600', color: 'white', fontSize: '14px' }}>{entry.type === 'give' ? t.give : t.take}</div>
@@ -1253,7 +1573,18 @@ function App() {
               </div>
             ) : (
               <div>
-                {contacts.map(c => {
+                <input
+                  type="search"
+                  value={khataContactSearch}
+                  onChange={e => setKhataContactSearch(e.target.value)}
+                  placeholder={lang === 'BN' ? 'নাম বা ফোন দিয়ে খুঁজুন...' : 'Search name or phone...'}
+                  aria-label={lang === 'BN' ? 'কন্টাক্ট খুঁজুন' : 'Search contacts'}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '11px 12px', marginBottom: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.06)', color: 'white' }}
+                />
+                {contacts.filter(c => {
+                  const query = khataContactSearch.trim().toLowerCase()
+                  return !query || [c.name, c.phone].some(value => String(value ?? '').toLowerCase().includes(query))
+                }).map(c => {
                   const bal = getContactBalance(c.id);
                   return (
                     <div key={c.id} onClick={() => setSelectedContactId(c.id)} style={{ cursor: 'pointer', background: 'rgba(255,255,255,0.05)', padding: '16px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
